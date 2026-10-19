@@ -1,0 +1,14 @@
+{
+  "name": "team-build",
+  "description": "Local marketplace for the grill-me / team-build engineering pipeline plugin",
+  "owner": {
+    "name": "Ronaldo Gomes"
+  },
+  "plugins": [
+    {
+      "name": "team-build-pipeline",
+      "source": "./plugins/team-build-pipeline",
+      "description": "Two-command pipeline: /grill-me writes an approved spec, /team-build runs it through lead + backend-engineer/frontend-engineer + reviewer until clean."
+    }
+  ]
+}
