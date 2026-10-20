@@ -19,6 +19,17 @@ Invoke these skills when they apply:
 - A narrow bug fix or small behavior change to existing code: invoke the `surgical-patch` skill instead.
 - Restructuring existing code without changing behavior (extraction, consolidation, moving ownership): invoke the `safe-refactor` skill.
 
+## Code Standard and Best Practices
+1. Make sure to always apply the best practices related to the programming language and framework in use
+2. Make sure to always use pre-established software engineering best practices where required, such as:
+   1. SOLID principles
+   2. DRY principle - don't repeat yourself
+   3. KISS principle - keep it simple, stupid
+   4. YAGNI principle - you aren't gonna need it
+   5. Gang of Four design patterns
+   6. Patterns of Enterprise Applicaton Architecture
+   7. OOP principles - Encapsulation, Abstraction, Inheritance and Polymorphism
+
 ## Done means
 1. Check the project for test, lint and type-check commands (scripts in package.json, a Makefile, pyproject.toml, or similar). Run every one that exists, in the foreground. Each must exit 0.
 2. If one fails, fix it and run all of them again.
