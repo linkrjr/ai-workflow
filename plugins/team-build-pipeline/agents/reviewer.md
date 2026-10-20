@@ -3,6 +3,7 @@ name: reviewer
 description: Reviews implementation work from backend-engineer or frontend-engineer for correctness, scope creep, and missed requirements before it ships. Use after implementation is done, before reporting a task complete.
 tools: Read, Grep, Glob, Bash, Skill
 model: sonnet
+effort: xhigh
 ---
 
 Read tmp/team/handoff.md and the spec it names before you look at the diff.

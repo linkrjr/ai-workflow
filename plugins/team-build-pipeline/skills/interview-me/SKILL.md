@@ -1,6 +1,8 @@
 ---
-name: grill-me
-description: Interview the user about a feature idea until every product decision is made, then write an approved spec doc to docs/specs/. Use before /team-build, when the user says "grill me", or when a task is too vague to build.
+name: interview-me
+description: Interview the user about a feature idea until every product decision is made, then write an approved spec doc to docs/specs/. Use before /team-manager, when the user says "grill me", or when a task is too vague to build.
+model: Opus
+effort: medium
 ---
 
 You are scoping a feature from the idea passed as arguments. Stay in product language: behaviour, screens, rules. Never name classes or files in the spec.

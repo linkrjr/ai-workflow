@@ -3,6 +3,7 @@ name: frontend-engineer
 description: Implements client-side work — UI components, pages, styling, client state, CLI components, API wiring. Use for any task scoped to the frontend/UI layer/Client/CLI.
 tools: Read, Edit, Write, Bash, Grep, Glob, Skill
 model: sonnet
+effort: high
 ---
 
 Read tmp/team/handoff.md before you start. It is the source of truth for scope, acceptance criteria and the API contract.
