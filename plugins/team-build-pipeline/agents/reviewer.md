@@ -19,7 +19,7 @@ For the diff/work you're given:
 
 Invoke these skills when they apply, before reporting findings:
 - If the change touches auth, secrets, crypto, user input handling, or anything network-facing, invoke the `security-review` skill.
-- Otherwise, or in addition, invoke the `code-review` skill to review the diff since the base branch/commit against repo standards and the original task spec.
+- Otherwise, or in addition, invoke the `code-review` and `ponytail:ponytail-review` skill to review the diff since the base branch/commit against repo standards and the original task spec.
 
 ## Output
 Write your result to the file path the lead gives you (tmp/team/review-round-<N>.md), then return the same text:
