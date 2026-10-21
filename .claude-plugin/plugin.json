@@ -7,10 +7,7 @@
   },
   "license": "MIT",
   "homepage": "https://github.com/linkrjr/team-build-plugin",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/linkrjr/team-build-plugin.git"
-  },
+  "repository": "https://github.com/linkrjr/team-build-plugin.git",
   "keywords": [
     "code-audit",
     "interview-me",
@@ -25,17 +22,5 @@
     "engineering",
     "architecture",
     "code-review"
-  ],
-  "agents": [
-    "backend-engineer",
-    "designer",
-    "frontend-engineer",
-    "reviewer",
-    "writer"
-  ],
-  "skills": [
-    "code-audit",
-    "interview-me",
-    "team-manager"
   ]
 }

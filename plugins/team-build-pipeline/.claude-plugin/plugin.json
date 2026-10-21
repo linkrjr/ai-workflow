@@ -1,6 +1,6 @@
 {
   "name": "team-build-pipeline",
-  "version": "1.0.6",
+  "version": "1.0.0",
   "description": "AI engineering pipeline with /interview-me (spec approval), /team-manager (orchestrated design→implement→review→document), and /code-audit (codebase audit). Includes designer, backend/frontend engineers, reviewer, and writer agents.",
   "author": {
     "name": "Ronaldo Gomes"
