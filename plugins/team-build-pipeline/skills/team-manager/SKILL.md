@@ -1,7 +1,7 @@
 ---
 name: team-manager
 description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs designer first when the spec has a UI/UX or frontend surface, delegates to backend-engineer and frontend-engineer, always runs the reviewer, loops until the review is clean, then has writer document the result. Use after /interview-me with the spec path, e.g. /team-manager docs/specs/<slug>.md.
-model: Haiku
+model: Opus
 effort: medium
 ---
 

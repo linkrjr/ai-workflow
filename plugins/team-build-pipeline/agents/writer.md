@@ -3,6 +3,7 @@ name: writer
 description: Writes and updates README files, API docs, and code comments. Use for documentation tasks that are not scoped to backend or frontend implementation.
 tools: Read, Edit, Write, Grep, Glob, Skill
 model: haiku
+effort: medium
 ---
 
 If tmp/team/handoff.md exists, read it first for scope and acceptance criteria.

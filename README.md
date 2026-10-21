@@ -16,9 +16,23 @@ This repo is a Claude Code plugin, `team-build-pipeline` (`plugins/team-build-pi
 
 ---
 
-## 2 — Layer Map
+## 2 — Setup & Prerequisites
 
-The codebase has no application layers in the traditional sense — it is a set of orchestration prompts (skills) and worker prompts (agents), outermost first:
+This plugin does not declare its external skill dependencies in `plugin.json` — Claude Code's plugin manifest schema has no `dependencies` field to put them in, so this is enforced by convention, not tooling. Before running `/team-manager`, install these or the steps that invoke them silently degrade (the `Skill(...)` call just doesn't resolve — no error, the agent skips the discipline and moves on):
+
+| Skill invoked | Called from | Where it actually comes from |
+|---|---|---|
+| `tdd`, `surgical-patch`, `safe-refactor`, `writing-for-agents`, `handoff`, `pr` | `agents/backend-engineer.md`, `agents/frontend-engineer.md`, `agents/writer.md`, `agents/reviewer.md`, `skills/team-manager/SKILL.md` | Personal skills-dir symlinks under `~/.claude/skills/` → `~/.agents/skills/` on this machine — not a marketplace plugin. `mattpocock-skills@claude-plugins-official` bundles equivalents for `tdd`/`pr`/`writing-for-agents`, but only under scoped names (`mattpocock-skills:tdd`) that these files do not reference. |
+| `code-review` | same as above | Real, installable plugin: `code-review@claude-plugins-official`. |
+| `security-review` | same as above | No file footprint under `~/.claude/` — almost certainly a Claude Code built-in, not something to install. |
+
+**Verify before running a task:** confirm each bare skill name above resolves on your machine (e.g. it's listed when Claude Code loads skills, or symlinked under your skills directory). If `tdd`, `surgical-patch`, `safe-refactor`, `writing-for-agents`, `handoff`, or `pr` aren't available, either install an equivalent under that exact bare name, or accept that the corresponding engineering discipline (TDD, surgical patching, doc cleanup) will be silently skipped for this run.
+
+---
+
+## 3 — Execution Stack
+
+The codebase has no application layers in the traditional sense — it is a set of orchestration prompts (skills, user-invoked) and worker prompts (agents, spawned by `team-manager`), listed in the order a run touches them:
 
 | Stage | Responsibility | Key symbol |
 |---|---|---|
@@ -32,7 +46,7 @@ The codebase has no application layers in the traditional sense — it is a set 
 
 ---
 
-## 3 — Execution Lifecycle
+## 4 — Execution Lifecycle
 
 **Representative execution:** a full `/interview-me` → `/team-manager` run.
 
@@ -46,7 +60,7 @@ The codebase has no application layers in the traditional sense — it is a set 
 
 ---
 
-## 4 — Domain Vocabulary
+## 5 — Domain Vocabulary
 
 | Term | Definition |
 |---|---|
@@ -59,11 +73,13 @@ The codebase has no application layers in the traditional sense — it is a set 
 
 ---
 
-## 5 — Common Change Recipes
+## 6 — Common Change Recipes
 
 ### Recipe A — Add a new agent role
 
-1. Create `agents/<name>.md` with the same frontmatter shape as the existing agents (`name`, `description`, `tools`, `model`) — model on `agents/writer.md` for a narrow-scope worker, or `agents/backend-engineer.md`/`agents/frontend-engineer.md` for an implementation-scoped one.
+Agents are workers spawned by `team-manager`; they have no slash command of their own.
+
+1. Create `agents/<name>.md` with the same frontmatter shape as the existing agents (`name`, `description`, `tools`, `model`, `effort`) — model on `agents/writer.md` for a narrow-scope worker, or `agents/backend-engineer.md`/`agents/frontend-engineer.md` for an implementation-scoped one.
 2. Add a numbered step to `skills/team-manager/SKILL.md` stating exactly when the lead spawns it (before/after which existing step) and whether it may run in parallel with another agent — mirror step 2 (Design)'s explicit trigger condition or step 5 (Document)'s explicit exclusivity rule.
 3. If other agents need its output, have it write a file under `tmp/team/` and add one line to the handoff pointing at that file (the pattern `designer` → `tmp/team/design.md` already establishes), rather than editing the consumer agents' own files.
 4. Renumber every subsequent step and fix every `go back to section N` cross-reference in the file.
@@ -75,15 +91,21 @@ The codebase has no application layers in the traditional sense — it is a set 
 
 ### Recipe C — Rename a skill or agent
 
-1. `git mv` the skill/agent file or directory to the new name.
+1. `git mv` the skill/agent file or directory to the new name (skills live at `skills/<name>/SKILL.md`; agents live at `agents/<name>.md`).
 2. Update the `name:` frontmatter field inside the moved file.
-3. Grep the whole repo for the old name (skill names are cross-referenced in prose inside other `SKILL.md` files, `plugin.json`, and `marketplace.json` — none of them read the frontmatter at runtime to resolve these references).
+3. Grep for the old name in: every `SKILL.md` and `agents/*.md` file (prose cross-references, e.g. `team-manager` naming `designer`), `plugins/team-build-pipeline/.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json`. None of these read the frontmatter at runtime to resolve the name — every reference is a literal string that must be updated by hand.
 
-<!-- TODO: no recipe yet for adding a brand-new pipeline command (a third skill alongside interview-me/team-manager) — there is only one precedent pair to generalize from. -->
+### Recipe D — Add a new skill (slash command)
+
+A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/interview-me`, `/team-manager`, `/code-audit` are the three precedents) — there is no separate "command" artifact to create.
+
+1. Create `skills/<name>/SKILL.md` with `name` and `description` frontmatter (`description` is what Claude Code uses to decide when to trigger the skill unprompted — be specific about the trigger phrase and the task shape).
+2. Write the body as direct instructions to the invoking agent, the same way `skills/interview-me/SKILL.md` and `skills/team-manager/SKILL.md` do — no separate framework or boilerplate needed.
+3. If the skill should appear in the local marketplace listing's description, update `.claude-plugin/marketplace.json`.
 
 ---
 
-## 6 — High-Signal Files by Question Type
+## 7 — High-Signal Files by Question Type
 
 | Question type | Where to start |
 |---|---|
@@ -92,10 +114,11 @@ The codebase has no application layers in the traditional sense — it is a set 
 | "What is `reviewer` allowed to do?" | `agents/reviewer.md` — note its `tools:` list has no `Edit`/`Write` |
 | "Which agent owns which layer?" | each agent's frontmatter `description:` line |
 | "What does the plugin declare itself as, and how is it installed locally?" | `plugins/team-build-pipeline/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` |
+| "What does a spec actually look like before I run `/team-manager`?" | `examples/todo-reminders-spec.md` |
 
 ---
 
-## 7 — Known Gotchas
+## 8 — Known Gotchas
 
 ---
 
@@ -129,12 +152,8 @@ The codebase has no application layers in the traditional sense — it is a set 
 **Why:** the handoff, design doc, and review-round files are per-run scratch/coordination state, not product source.
 **What breaks:** skipping this lets scratch coordination files get committed into whatever repo the pipeline is running against.
 
-<!-- TODO: no senior-engineer interview has happened yet for gotchas beyond what's already stated explicitly in skills/team-manager/SKILL.md. If more exist (e.g. around how `handoff.md` should be amended mid-task, or what happens if an engineer disagrees with a finding), capture them here after the next review. -->
+This list reflects the gotchas made explicit in `skills/team-manager/SKILL.md` itself; it has not had a dedicated senior-engineer pass for gotchas beyond that (e.g. how `handoff.md` should be amended mid-task, or what happens if an engineer disagrees with a finding). Add entries here as they're found.
 
 ---
 
-**The agent/skill files assume external skills that are not installable plugin dependencies**
-
-**Rule:** `agents/backend-engineer.md`, `agents/frontend-engineer.md`, `agents/writer.md`, `agents/reviewer.md`, and `skills/team-manager/SKILL.md` invoke `tdd`, `surgical-patch`, `safe-refactor`, `writing-for-agents`, `ai-slop-cleaner`, `security-review`, `code-review`, `pr`, and `handoff` by bare (unscoped) name. On a machine without those exact bare names registered, those `Skill(...)` calls will fail to resolve.
-**Why:** verified by checking where each name actually resolves from on this machine: `surgical-patch`, `safe-refactor`, `writing-for-agents`, `handoff`, `tdd`, and `pr` are symlinks under `~/.claude/skills/` pointing into a personal `~/.agents/skills/` directory — Claude Code's local "skills-dir" convention, not a marketplace plugin. `code-review` is backed by the real, installable `code-review@claude-plugins-official` plugin. `security-review` has no file footprint anywhere in `~/.claude/`, so it is almost certainly a Claude Code built-in. None of `surgical-patch`, `safe-refactor`, `writing-for-agents`, or `handoff` have a known publicly-installable source — `mattpocock-skills@claude-plugins-official` bundles equivalents for `tdd`/`pr`/`writing-for-agents`/`code-review`, but only under the scoped name `mattpocock-skills:tdd` etc., which these files do not reference.
-**What breaks:** installing this plugin on a machine that lacks that personal skills directory makes every one of those `Skill(...)` invocations (except `code-review` and whatever `security-review` turns out to be) silently unresolvable — the agents degrade to skipping the referenced discipline (TDD, surgical patching, doc cleanup) rather than erroring loudly, since the invocation is just a line of agent prompt text, not a hard dependency check.
+**External skill dependencies are not plugin-enforced** — see [Section 2, Setup & Prerequisites](#2--setup--prerequisites) for the full list and how to verify them.
