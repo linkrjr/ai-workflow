@@ -6,15 +6,32 @@
     "name": "Ronaldo Gomes"
   },
   "license": "MIT",
+  "homepage": "https://github.com/linkrjr/team-build-plugin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/linkrjr/team-build-plugin.git"
+  },
   "keywords": [
-    "spec",
-    "team",
-    "lead",
+    "code-audit",
+    "interview-me",
+    "team-manager",
+    "backend-engineer",
+    "frontend-engineer",
     "designer",
     "reviewer",
-    "backend",
-    "frontend",
-    "pipeline"
+    "writer",
+    "spec",
+    "pipeline",
+    "engineering",
+    "architecture",
+    "code-review"
+  ],
+  "agents": [
+    "backend-engineer",
+    "designer",
+    "frontend-engineer",
+    "reviewer",
+    "writer"
   ],
   "skills": [
     "code-audit",
