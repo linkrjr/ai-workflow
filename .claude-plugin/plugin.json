@@ -1,0 +1,41 @@
+{
+  "name": "team-build-pipeline",
+  "version": "1.0.6",
+  "description": "AI engineering pipeline with /interview-me (spec approval), /team-manager (orchestrated design→implement→review→document), and /code-audit (codebase audit). Includes designer, backend/frontend engineers, reviewer, and writer agents.",
+  "author": {
+    "name": "Ronaldo Gomes"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/linkrjr/team-build-plugin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/linkrjr/team-build-plugin.git"
+  },
+  "keywords": [
+    "code-audit",
+    "interview-me",
+    "team-manager",
+    "backend-engineer",
+    "frontend-engineer",
+    "designer",
+    "reviewer",
+    "writer",
+    "spec",
+    "pipeline",
+    "engineering",
+    "architecture",
+    "code-review"
+  ],
+  "agents": [
+    "backend-engineer",
+    "designer",
+    "frontend-engineer",
+    "reviewer",
+    "writer"
+  ],
+  "skills": [
+    "code-audit",
+    "interview-me",
+    "team-manager"
+  ]
+}
