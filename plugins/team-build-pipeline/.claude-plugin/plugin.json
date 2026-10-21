@@ -1,6 +1,6 @@
 {
   "name": "team-build-pipeline",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Two-command pipeline: /interview-me interviews the user and writes an approved spec to docs/specs/, then /team-manager has the session act as lead, delegating to backend-engineer and frontend-engineer subagents and always running the reviewer until the review is clean.",
   "author": {
     "name": "Ronaldo Gomes"
