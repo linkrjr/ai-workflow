@@ -1,8 +1,10 @@
 # Tech Debt Audit — team-build-plugin
 
-**Generated:** 2026-10-22 (repeat run, previous audit: 2026-10-21 @ a1f8c34)
-**Base commit:** 20d2a0b
+**Generated:** 2026-10-22 (verification repeat run, previous audit: 2026-10-22 @ 20d2a0b)
+**Base commit:** 03e45b2
 **Repo type:** Claude Code plugin (prompt-based, no runtime code)
+
+**Verification pass result:** Re-read every file touched by the F011–F022 fix commit (`03e45b2`) against the audit's own claims. All 22 findings (F001–F022) confirmed actually resolved in the current tree, not just claimed — no regressions found. One new trivial nit caught during verification and fixed on the spot: `designer.md`'s "Domain Aware Defaults" heading was `#` (H1) while every other section in the file is `##` (H2) — not worth its own finding ID, just fixed. **Audit is clean.**
 
 ---
 
@@ -101,7 +103,7 @@ All 12 findings from this round applied and verified 2026-10-22. Nothing open.
 ## Things That Look Bad But Are Actually Fine
 
 - **`ticket-reviewer.md` has `Write` in its tools; `code-reviewer.md` doesn't.** Looks like an inconsistency between two review-flavored agents, but it's deliberate: `ticket-reviewer` genuinely needs `Write` for throwaway repro scripts (its own text says so), while `code-reviewer` only ever produces one report file and can do that via `Bash` heredoc/redirection — it's kept off `Write`/`Edit` specifically so it can never touch product code. Different jobs, correctly different tool grants.
-- **Agent prompt files are 24–120 lines** (except `designer.md`, flagged separately): small, but correct — these are role descriptions and constraints, not implementations. Brevity forces clarity.
+- **Agent prompt files are 24–115 lines, `designer.md` the longest:** small, but correct — these are role descriptions and constraints, not implementations. `designer.md` runs longer because visual-design judgment needs more worked examples (good/bad, a full output format) than a backend/review role does; that's not debt by itself — F011–F015 (now resolved) were about actual defects in that file (dead reference, contradiction, duplication), not its length.
 - **No version field in agent/skill frontmatter:** versioning lives at the `plugin.json` level only. Correct for this architecture.
 - **`team-manager` is Opus, `code-reviewer` is Sonnet with `effort: xhigh`:** looks like cost misalignment, but it's intentional — orchestration needs fast decisions, review needs deep reasoning.
 - **README chapter headings are numbered (1, 2, 3…), not `h2`/`h3`:** unconventional markdown, but deliberate and consistent — matches the onboarding-document format the file commits to throughout.

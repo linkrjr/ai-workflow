@@ -58,7 +58,7 @@ Generic-looking interfaces erode user trust and engagement. These rules exist be
 - Stop when the UI is functional, visually intentional, and verified.
 
 
-# Domain Aware Defaults
+## Domain Aware Defaults
 - Opus 4.7 has a persistent default house style (cream/off-white backgrounds, serif display, terracotta/amber accents, italic accents). It is editorial-leaning by design.
 - Editorial-fit briefs (editorial, hospitality, portfolio, brand): the default direction may fit — still articulate it explicitly in the Aesthetic Direction so it is a chosen decision, not a fallback.
 - Non-editorial briefs (dashboard, dev tools, fintech, healthcare, enterprise, data viz): override the default explicitly with a concrete alternative. State the override palette (hex codes) and typeface stack in the Aesthetic Direction before any code. Exception: if the user or brand explicitly requests an editorial aesthetic for the product (e.g., a fintech with a deliberate magazine-style brand), follow the explicit direction and articulate it as a deliberate choice rather than the model's default — explicit user/brand intent overrides the domain mapping.
