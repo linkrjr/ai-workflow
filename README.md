@@ -22,9 +22,10 @@ This plugin does not declare its external skill dependencies in `plugin.json` �
 
 | Skill invoked | Called from | Where it actually comes from |
 |---|---|---|
-| `tdd`, `surgical-patch`, `safe-refactor`, `writing-for-agents`, `handoff`, `pr` | `agents/backend-engineer.md`, `agents/frontend-engineer.md`, `agents/writer.md`, `agents/code-reviewer.md`, `skills/team-manager/SKILL.md` | Personal skills-dir symlinks under `~/.claude/skills/` → `~/.agents/skills/` on this machine — not a marketplace plugin. `mattpocock-skills@claude-plugins-official` bundles equivalents for `tdd`/`pr`/`writing-for-agents`, but only under scoped names (`mattpocock-skills:tdd`) that these files do not reference. |
-| `code-review` | same as above | Real, installable plugin: `code-review@claude-plugins-official`. |
-| `security-review` | same as above | No file footprint under `~/.claude/` — almost certainly a Claude Code built-in, not something to install. |
+| `tdd`, `surgical-patch`, `safe-refactor` | `agents/backend-engineer.md`, `agents/frontend-engineer.md` | Personal skills-dir symlinks under `~/.claude/skills/` → `~/.agents/skills/` on this machine — not a marketplace plugin. `mattpocock-skills@claude-plugins-official` bundles equivalents for `tdd`, but only under a scoped name (`mattpocock-skills:tdd`) these files do not reference. |
+| `writing-for-agents` | `agents/writer.md` | Same personal skills-dir symlink as above. `mattpocock-skills@claude-plugins-official` bundles an equivalent under `mattpocock-skills:writing-for-agents`, not referenced here. |
+| `handoff`, `pr` | `skills/team-manager/SKILL.md` (the lead only — no worker agent invokes either) | Same personal skills-dir symlink as above. `mattpocock-skills@claude-plugins-official` bundles an equivalent `pr` under `mattpocock-skills:pr`, not referenced here. |
+| `code-review`, `security-review` | `agents/code-reviewer.md` | `code-review`: real, installable plugin, `code-review@claude-plugins-official`. `security-review`: no file footprint under `~/.claude/` — almost certainly a Claude Code built-in, not something to install. |
 
 **Verify before running a task:** confirm each bare skill name above resolves on your machine (e.g. it's listed when Claude Code loads skills, or symlinked under your skills directory). If `tdd`, `surgical-patch`, `safe-refactor`, `writing-for-agents`, `handoff`, or `pr` aren't available, either install an equivalent under that exact bare name, or accept that the corresponding engineering discipline (TDD, surgical patching, doc cleanup) will be silently skipped for this run.
 

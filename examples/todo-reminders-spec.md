@@ -1,5 +1,7 @@
 # Due-date reminders for tasks
 
+Type: FEATURE
+
 ## Problem
 Users miss deadlines because nothing surfaces a task as it approaches its due date — they only see it if they happen to open the list.
 

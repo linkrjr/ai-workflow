@@ -27,7 +27,7 @@ You are the engineering lead for the spec passed as arguments. You scope, delega
 2. Otherwise spawn `ticket-reviewer` alone, before any other agent, with: "Here is the ticket: <spec path>. Confirm whether this reproduces locally." Wait for its report, then save it verbatim to `tmp/team/ticket-review.md`.
 3. Read the `STATUS:` line.
    - `REPRODUCED` → go back to step 3 above and continue the normal pipeline.
-   - `NOT REPRODUCED` or `BLOCKED` → stop here. Do not write the rest of the handoff and do not spawn any engineer. Report to the user now (see "Report" format in section 6) using the ticket-reviewer's own detail: the ticket summary, steps tried, evidence, and notes explaining why it cannot move forward. Wait for the user's next instruction before touching this spec again.
+   - `NOT REPRODUCED` or `BLOCKED` → stop here. Do not write the rest of the handoff and do not spawn any engineer. Nothing has been implemented or reviewed yet, so do not use section 6's format or its "go back to section 4" check — report now, verbatim from `ticket-reviewer`'s output: `STATUS`, `Ticket`, `Steps tried`, `Evidence`, `Notes`. Wait for the user's next instruction before touching this spec again.
 
 ## 2. Design (only when the spec has a UI/UX or frontend surface)
 1. Check the spec: does it mention UI/UX, screens, visual design, layout, or any frontend work? If so, and the client is NOT a CLI (a terminal/CLI client has no visual design surface), spawn `designer` alone, before any engineer starts.
