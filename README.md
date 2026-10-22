@@ -10,13 +10,13 @@
 
 ---
 
-## 1 — Codebase Purpose
+## Codebase Purpose
 
 This repo is a Claude Code plugin, `team-build-pipeline` (`plugins/team-build-pipeline/.claude-plugin/plugin.json`), and the marketplace that hosts it (`.claude-plugin/marketplace.json`). It's meant to be published: installed by adding this GitHub repository as a marketplace (`plugin.json`'s `homepage`/`repository` fields point at it), not just run locally out of a clone. It exposes two slash commands that together turn a feature idea into shipped, reviewed, documented code: `/interview-me` interviews the user into an approved spec, and `/team-manager` runs that spec through a lead-and-subagents pipeline (design, implementation, mandatory review, documentation). It produces no runtime service — its "output" is code changes made elsewhere in whatever repo it's invoked in, plus the spec and coordination files it writes under `docs/specs/` and `tmp/team/`.
 
 ---
 
-## 2 — Setup & Prerequisites
+## Setup & Prerequisites
 
 This plugin does not declare its external skill dependencies in `plugin.json` — Claude Code's plugin manifest schema has no `dependencies` field to put them in, so this is enforced by convention, not tooling. Before running `/team-manager`, install these or the steps that invoke them silently degrade (the `Skill(...)` call just doesn't resolve — no error, the agent skips the discipline and moves on):
 
@@ -31,7 +31,7 @@ This plugin does not declare its external skill dependencies in `plugin.json` �
 
 ---
 
-## 3 — Execution Stack
+## Execution Stack
 
 The codebase has no application layers in the traditional sense — it is a set of orchestration prompts (skills, user-invoked) and worker prompts (agents, spawned by `team-manager`), listed in the order a run touches them:
 
@@ -48,7 +48,7 @@ The codebase has no application layers in the traditional sense — it is a set 
 
 ---
 
-## 4 — Execution Lifecycle
+## Execution Lifecycle
 
 **Representative execution:** a full `/interview-me` → `/team-manager` run.
 
@@ -63,7 +63,7 @@ The codebase has no application layers in the traditional sense — it is a set 
 
 ---
 
-## 5 — Domain Vocabulary
+## Domain Vocabulary
 
 | Term | Definition |
 |---|---|
@@ -78,7 +78,7 @@ The codebase has no application layers in the traditional sense — it is a set 
 
 ---
 
-## 6 — Common Change Recipes
+## Common Change Recipes
 
 ### Recipe A — Add a new agent role
 
@@ -111,7 +111,7 @@ A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/interv
 
 ---
 
-## 7 — High-Signal Files by Question Type
+## High-Signal Files by Question Type
 
 | Question type | Where to start |
 |---|---|
@@ -124,7 +124,7 @@ A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/interv
 
 ---
 
-## 8 — Known Gotchas
+## Known Gotchas
 
 ---
 
@@ -170,4 +170,4 @@ This list reflects the gotchas made explicit in `skills/team-manager/SKILL.md` i
 
 ---
 
-**External skill dependencies are not plugin-enforced** — see [Section 2, Setup & Prerequisites](#2--setup--prerequisites) for the full list and how to verify them.
+**External skill dependencies are not plugin-enforced** — see [Setup & Prerequisites](#setup--prerequisites) for the full list and how to verify them.
