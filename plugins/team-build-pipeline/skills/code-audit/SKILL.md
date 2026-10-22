@@ -93,7 +93,14 @@ Each subagent gets: scope (one module), the dimensions list above, the citation 
 
 ## Repeat-run mode
 
-If `TECH_DEBT_AUDIT.md` already exists in the repo, read it first. Mark resolved findings as `RESOLVED`, update stale ones, and tag new findings with `NEW`. This turns the audit into a living document tracked over time.
+If `TECH_DEBT_AUDIT.md` already exists in the repo, read it first, then re-verify every existing finding against the current code — don't trust the file's own claims.
+
+- **Fixed** (confirmed in the current tree): delete it. Don't keep a `RESOLVED` row, don't keep it in the Executive Summary, Top 5, or Quick Wins, don't leave a note saying it was fixed. A fixed finding is not debt; the doc is a snapshot of current debt, not a changelog, and has nothing left to track for it.
+- **Not actually fixed** despite a prior claim: keep it, and say so plainly (code and claim disagree).
+- **Still open**: keep it, updating `file:line` if it moved.
+- **New this pass**: add it.
+
+The output should read as if written fresh against the current tree — no residue of past findings, no "all clear" narration about rounds that happened before this one. If literally everything from the prior file is fixed and nothing new turned up, say that in one line and let the rest of the sections be short or empty ("Nothing material") rather than padding them with history.
 
 ---
 
