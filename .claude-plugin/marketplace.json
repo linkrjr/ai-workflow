@@ -8,7 +8,7 @@
     {
       "name": "team-build-pipeline",
       "source": "./plugins/team-build-pipeline",
-      "description": "AI engineering pipeline: /interview-me (spec), /team-manager (design→code→review→docs), /code-audit (audit). Includes designer, backend/frontend engineers, reviewer, writer agents."
+      "description": "AI engineering pipeline: /interview-me (spec), /team-manager (design→code→review→docs), /code-audit (audit). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, writer agents."
     }
   ]
 }

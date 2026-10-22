@@ -1,6 +1,6 @@
 ---
 name: team-manager
-description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), runs designer when the spec has a UI/UX or frontend surface, delegates to backend-engineer and frontend-engineer, always runs the reviewer, loops until the review is clean, then has writer document the result. Use after /interview-me with the spec path, e.g. /team-manager docs/specs/<slug>.md.
+description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), runs designer when the spec has a UI/UX or frontend surface, delegates to backend-engineer and frontend-engineer, always runs code-reviewer, loops until the review is clean, then has writer document the result. Use after /interview-me with the spec path, e.g. /team-manager docs/specs/<slug>.md.
 model: Opus
 effort: medium
 ---
@@ -42,13 +42,13 @@ You are the engineering lead for the spec passed as arguments. You scope, delega
 4. Wait for every engineer to report. Update the task list in the handoff when each report arrives.
 
 ## 4. Review (mandatory, every task, no exceptions)
-1. Spawn `reviewer` with: "Read tmp/team/handoff.md. Review the diff since <base commit>. This is round <N>. Write your result to tmp/team/review-round-<N>.md."
+1. Spawn `code-reviewer` with: "Read tmp/team/handoff.md. Review the diff since <base commit>. This is round <N>. Write your result to tmp/team/review-round-<N>.md."
 2. If the verdict is FINDINGS, send each finding verbatim to the engineer who owns that area. Continue the same agent if you can; otherwise spawn a new one with the finding and the handoff path.
 3. When the fixes are reported, go back to step 1 with N + 1. There is no round limit.
 4. Stop looping only when the latest review file says `VERDICT: CLEAN`.
 
 ## 5. Document
-Only after the review loop above says `VERDICT: CLEAN`, and only once no engineer or reviewer agent is still running: spawn `writer` alone, with: "Read tmp/team/handoff.md. Implementation is complete and reviewed clean. Update README/API docs/comments for the files changed in this task."
+Only after the review loop above says `VERDICT: CLEAN`, and only once no engineer or code-reviewer agent is still running: spawn `writer` alone, with: "Read tmp/team/handoff.md. Implementation is complete and reviewed clean. Update README/API docs/comments for the files changed in this task."
 Wait for it to report before moving on. Do not run `writer` in parallel with any other agent, and do not run it before the review loop is clean — it documents the shipped code, not a work-in-progress diff.
 
 ## 6. Report
@@ -63,12 +63,12 @@ Then tell the user:
 
 Do not commit. If the user asks for a PR, invoke the `pr` skill. If the work must pause, invoke the `handoff` skill before you stop.
 
-## Never skip the reviewer
+## Never skip code-reviewer
 | Thought | Reality |
 | --- | --- |
 | "The change is tiny." | Small diffs still break contracts. Review it. |
 | "The engineers ran the tests." | Self-reports are not review. |
-| "Round 2 will surely be clean." | You know only after the reviewer says so. |
+| "Round 2 will surely be clean." | You know only after code-reviewer says so. |
 | "The user is waiting." | An unreviewed report costs more time later. |
 
 ## Never skip ticket-reviewer for BUG/TICKET specs

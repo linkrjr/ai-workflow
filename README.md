@@ -22,7 +22,7 @@ This plugin does not declare its external skill dependencies in `plugin.json` �
 
 | Skill invoked | Called from | Where it actually comes from |
 |---|---|---|
-| `tdd`, `surgical-patch`, `safe-refactor`, `writing-for-agents`, `handoff`, `pr` | `agents/backend-engineer.md`, `agents/frontend-engineer.md`, `agents/writer.md`, `agents/reviewer.md`, `skills/team-manager/SKILL.md` | Personal skills-dir symlinks under `~/.claude/skills/` → `~/.agents/skills/` on this machine — not a marketplace plugin. `mattpocock-skills@claude-plugins-official` bundles equivalents for `tdd`/`pr`/`writing-for-agents`, but only under scoped names (`mattpocock-skills:tdd`) that these files do not reference. |
+| `tdd`, `surgical-patch`, `safe-refactor`, `writing-for-agents`, `handoff`, `pr` | `agents/backend-engineer.md`, `agents/frontend-engineer.md`, `agents/writer.md`, `agents/code-reviewer.md`, `skills/team-manager/SKILL.md` | Personal skills-dir symlinks under `~/.claude/skills/` → `~/.agents/skills/` on this machine — not a marketplace plugin. `mattpocock-skills@claude-plugins-official` bundles equivalents for `tdd`/`pr`/`writing-for-agents`, but only under scoped names (`mattpocock-skills:tdd`) that these files do not reference. |
 | `code-review` | same as above | Real, installable plugin: `code-review@claude-plugins-official`. |
 | `security-review` | same as above | No file footprint under `~/.claude/` — almost certainly a Claude Code built-in, not something to install. |
 
@@ -42,7 +42,7 @@ The codebase has no application layers in the traditional sense — it is a set 
 | `ticket-reviewer` agent | Conditional reproduction gate for BUG/TICKET specs, before any other agent starts | `agents/ticket-reviewer.md` |
 | `designer` agent | Conditional UI/UX pass, before any frontend work starts | `agents/designer.md` |
 | `backend-engineer` / `frontend-engineer` agents | Implementation workers, scoped to one layer each | `agents/backend-engineer.md`, `agents/frontend-engineer.md` |
-| `reviewer` agent | Mandatory, read-only review gate (no Edit/Write tools) | `agents/reviewer.md` |
+| `code-reviewer` agent | Mandatory, read-only review gate (no Edit/Write tools) | `agents/code-reviewer.md` |
 | `writer` agent | Final documentation pass, after review is clean | `agents/writer.md` |
 
 ---
@@ -54,11 +54,11 @@ The codebase has no application layers in the traditional sense — it is a set 
 1. **Entry (spec):** the user runs `/interview-me`; `skills/interview-me/SKILL.md` asks one multiple-choice question per turn, tracks open decisions, and writes `docs/specs/<slug>.md` once the ledger is empty.
 2. **Prepare:** the user runs `/team-manager docs/specs/<slug>.md`; step "1. Prepare" in `skills/team-manager/SKILL.md` reads the spec and writes `tmp/team/handoff.md` (acceptance criteria, scope, API contract, task list) — the single shared source of truth every subagent reads.
 3. **Verify reproduction (conditional):** if the spec's `Type:` is `BUG` or `TICKET`, step "1a. Verify reproduction" spawns `ticket-reviewer` alone, before any other agent, and saves its report to `tmp/team/ticket-review.md`. A `REPRODUCED` status continues the pipeline; `NOT REPRODUCED` or `BLOCKED` stops here and reports straight to the user — no designer, no engineer. `FEATURE` specs skip this step entirely.
-5. **Design (conditional):** step "2. Design" spawns `designer` alone, only if the spec has a UI/UX or frontend surface and the client isn't a CLI, and only before any engineer starts. Its output is saved to `tmp/team/design.md` and linked from the handoff.
-6. **Implement:** step "3. Implement" spawns `backend-engineer` and/or `frontend-engineer` depending on which layers change; each reads `tmp/team/handoff.md` as its brief.
-7. **Review:** step "4. Review" spawns `reviewer`, which writes `tmp/team/review-round-<N>.md` ending in `VERDICT: CLEAN` or `VERDICT: FINDINGS`. The lead routes findings back to the owning engineer and loops — no round limit — until a round says `CLEAN`.
-8. **Document:** step "5. Document" spawns `writer` alone — never in parallel with another agent, never before the review verdict is `CLEAN` — to update README/API docs/comments for the files that changed.
-9. **Report:** step "6. Report" confirms the latest review file says `CLEAN`, then the lead reports what changed, AC-to-test coverage, and try-it-yourself steps to the user. The lead never commits.
+4. **Design (conditional):** step "2. Design" spawns `designer` alone, only if the spec has a UI/UX or frontend surface and the client isn't a CLI, and only before any engineer starts. Its output is saved to `tmp/team/design.md` and linked from the handoff.
+5. **Implement:** step "3. Implement" spawns `backend-engineer` and/or `frontend-engineer` depending on which layers change; each reads `tmp/team/handoff.md` as its brief.
+6. **Review:** step "4. Review" spawns `code-reviewer`, which writes `tmp/team/review-round-<N>.md` ending in `VERDICT: CLEAN` or `VERDICT: FINDINGS`. The lead routes findings back to the owning engineer and loops — no round limit — until a round says `CLEAN`.
+7. **Document:** step "5. Document" spawns `writer` alone — never in parallel with another agent, never before the review verdict is `CLEAN` — to update README/API docs/comments for the files that changed.
+8. **Report:** step "6. Report" confirms the latest review file says `CLEAN`, then the lead reports what changed, AC-to-test coverage, and try-it-yourself steps to the user. The lead never commits.
 
 ---
 
@@ -68,8 +68,8 @@ The codebase has no application layers in the traditional sense — it is a set 
 |---|---|
 | **Handoff** (`tmp/team/handoff.md`) | The shared scope/contract document every subagent reads before starting. Written and updated by the lead (`team-manager`). |
 | **AC** | Acceptance criteria — numbered (AC1, AC2, …), copied verbatim from the spec into the handoff; each must trace to a test. |
-| **Round** | One `reviewer` pass, recorded as `tmp/team/review-round-<N>.md`. The implement→review loop repeats with no round limit until a round is `CLEAN`. |
-| **Verdict** | The `reviewer`'s pass/fail line: `VERDICT: CLEAN` (nothing wrong) or `VERDICT: FINDINGS` (listed, routed back to the owning engineer). |
+| **Round** | One `code-reviewer` pass, recorded as `tmp/team/review-round-<N>.md`. The implement→review loop repeats with no round limit until a round is `CLEAN`. |
+| **Verdict** | The `code-reviewer`'s pass/fail line: `VERDICT: CLEAN` (nothing wrong) or `VERDICT: FINDINGS` (listed, routed back to the owning engineer). |
 | **subagent_type** | The Agent-tool parameter the lead passes to spawn a specific agent file by name (e.g. `"backend-engineer"`, `"designer"`). |
 | **Design doc** (`tmp/team/design.md`) | `designer`'s saved output (aesthetic direction, components, design choices) — linked from the handoff so both engineers can read it. |
 | **Type** | The spec's `FEATURE \| BUG \| TICKET` field, written by `interview-me`. `BUG`/`TICKET` gate the pipeline on `ticket-reviewer`; `FEATURE` skips that gate. |
@@ -116,7 +116,7 @@ A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/interv
 |---|---|
 | "How does the whole pipeline run end to end?" | `skills/team-manager/SKILL.md` |
 | "Where does the spec come from, and what must it contain?" | `skills/interview-me/SKILL.md` |
-| "What is `reviewer` allowed to do?" | `agents/reviewer.md` — note its `tools:` list has no `Edit`/`Write` |
+| "What is `code-reviewer` allowed to do?" | `agents/code-reviewer.md` — note its `tools:` list has no `Edit`/`Write` |
 | "Which agent owns which layer?" | each agent's frontmatter `description:` line |
 | "What does the plugin declare itself as, and how is it installed locally?" | `plugins/team-build-pipeline/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` |
 | "What does a spec actually look like before I run `/team-manager`?" | `examples/todo-reminders-spec.md` |
@@ -127,10 +127,10 @@ A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/interv
 
 ---
 
-**Never skip the reviewer**
+**Never skip code-reviewer**
 
-**Rule:** every implementation task goes through `reviewer`, with no exceptions — regardless of diff size or whether the engineer already ran tests.
-**Why:** `skills/team-manager/SKILL.md`'s own "Never skip the reviewer" table states self-reports are not review, and small diffs still break contracts between layers.
+**Rule:** every implementation task goes through `code-reviewer`, with no exceptions — regardless of diff size or whether the engineer already ran tests.
+**Why:** `skills/team-manager/SKILL.md`'s own "Never skip code-reviewer" table states self-reports are not review, and small diffs still break contracts between layers.
 **What breaks:** a contract break between `backend-engineer` and `frontend-engineer` output ships undetected; fixing it later costs more than the review round would have.
 
 ---
