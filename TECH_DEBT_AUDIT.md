@@ -106,7 +106,7 @@ All 12 findings from this round applied and verified 2026-10-22. Nothing open.
 - **Agent prompt files are 24–115 lines, `designer.md` the longest:** small, but correct — these are role descriptions and constraints, not implementations. `designer.md` runs longer because visual-design judgment needs more worked examples (good/bad, a full output format) than a backend/review role does; that's not debt by itself — F011–F015 (now resolved) were about actual defects in that file (dead reference, contradiction, duplication), not its length.
 - **No version field in agent/skill frontmatter:** versioning lives at the `plugin.json` level only. Correct for this architecture.
 - **`team-manager` is Opus, `code-reviewer` is Sonnet with `effort: xhigh`:** looks like cost misalignment, but it's intentional — orchestration needs fast decisions, review needs deep reasoning.
-- **`team-manager`/`interview-me` skills have no `tools:` frontmatter field, unlike every agent file:** not an oversight — skills are the lead/orchestrator prompts and inherit the full parent session's tools by convention in this repo; only worker *agents* (spawned via the `Agent` tool) declare a scoped `tools:` list. Consistent once you know the convention.
+- **`team-manager`/`interview-me` skills have no `tools:` frontmatter field, unlike every agent file:** not an oversight — a skill runs as the invoking session itself, not a spawned subagent, so it inherits the full parent session's tools rather than a scoped allowlist. This was previously undocumented at the point a future skill author would look; `README.md` Recipe D now states it explicitly, contrasted against Recipe A's agent frontmatter.
 
 ---
 

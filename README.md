@@ -105,7 +105,7 @@ Agents are workers spawned by `team-manager`; they have no slash command of thei
 
 A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/interview-me`, `/team-manager`, `/code-audit` are the three precedents) — there is no separate "command" artifact to create.
 
-1. Create `skills/<name>/SKILL.md` with `name` and `description` frontmatter (`description` is what Claude Code uses to decide when to trigger the skill unprompted — be specific about the trigger phrase and the task shape).
+1. Create `skills/<name>/SKILL.md` with `name` and `description` frontmatter (`description` is what Claude Code uses to decide when to trigger the skill unprompted — be specific about the trigger phrase and the task shape). Unlike agents (Recipe A), skills declare no `tools:` field — a skill runs as the invoking session itself, not a spawned subagent, so it inherits the full parent session's tools rather than a scoped allowlist.
 2. Write the body as direct instructions to the invoking agent, the same way `skills/interview-me/SKILL.md` and `skills/team-manager/SKILL.md` do — no separate framework or boilerplate needed.
 3. If the skill should appear in the local marketplace listing's description, update `.claude-plugin/marketplace.json`.
 
