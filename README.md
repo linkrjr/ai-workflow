@@ -39,6 +39,7 @@ The codebase has no application layers in the traditional sense — it is a set 
 | Plugin manifest | Declares the plugin and its marketplace listing | `plugin.json`, `marketplace.json` |
 | `interview-me` skill | Interviews the user, writes the approved spec | `skills/interview-me/SKILL.md` |
 | `team-manager` skill (lead) | Orchestrates Prepare → Design → Implement → Review → Document → Report | `skills/team-manager/SKILL.md` |
+| `ticket-reviewer` agent | Conditional reproduction gate for BUG/TICKET specs, before any other agent starts | `agents/ticket-reviewer.md` |
 | `designer` agent | Conditional UI/UX pass, before any frontend work starts | `agents/designer.md` |
 | `backend-engineer` / `frontend-engineer` agents | Implementation workers, scoped to one layer each | `agents/backend-engineer.md`, `agents/frontend-engineer.md` |
 | `reviewer` agent | Mandatory, read-only review gate (no Edit/Write tools) | `agents/reviewer.md` |
@@ -52,11 +53,12 @@ The codebase has no application layers in the traditional sense — it is a set 
 
 1. **Entry (spec):** the user runs `/interview-me`; `skills/interview-me/SKILL.md` asks one multiple-choice question per turn, tracks open decisions, and writes `docs/specs/<slug>.md` once the ledger is empty.
 2. **Prepare:** the user runs `/team-manager docs/specs/<slug>.md`; step "1. Prepare" in `skills/team-manager/SKILL.md` reads the spec and writes `tmp/team/handoff.md` (acceptance criteria, scope, API contract, task list) — the single shared source of truth every subagent reads.
-3. **Design (conditional):** step "2. Design" spawns `designer` alone, only if the spec has a UI/UX or frontend surface and the client isn't a CLI, and only before any engineer starts. Its output is saved to `tmp/team/design.md` and linked from the handoff.
-4. **Implement:** step "3. Implement" spawns `backend-engineer` and/or `frontend-engineer` depending on which layers change; each reads `tmp/team/handoff.md` as its brief.
-5. **Review:** step "4. Review" spawns `reviewer`, which writes `tmp/team/review-round-<N>.md` ending in `VERDICT: CLEAN` or `VERDICT: FINDINGS`. The lead routes findings back to the owning engineer and loops — no round limit — until a round says `CLEAN`.
-6. **Document:** step "5. Document" spawns `writer` alone — never in parallel with another agent, never before the review verdict is `CLEAN` — to update README/API docs/comments for the files that changed.
-7. **Report:** step "6. Report" confirms the latest review file says `CLEAN`, then the lead reports what changed, AC-to-test coverage, and try-it-yourself steps to the user. The lead never commits.
+3. **Verify reproduction (conditional):** if the spec's `Type:` is `BUG` or `TICKET`, step "1a. Verify reproduction" spawns `ticket-reviewer` alone, before any other agent, and saves its report to `tmp/team/ticket-review.md`. A `REPRODUCED` status continues the pipeline; `NOT REPRODUCED` or `BLOCKED` stops here and reports straight to the user — no designer, no engineer. `FEATURE` specs skip this step entirely.
+5. **Design (conditional):** step "2. Design" spawns `designer` alone, only if the spec has a UI/UX or frontend surface and the client isn't a CLI, and only before any engineer starts. Its output is saved to `tmp/team/design.md` and linked from the handoff.
+6. **Implement:** step "3. Implement" spawns `backend-engineer` and/or `frontend-engineer` depending on which layers change; each reads `tmp/team/handoff.md` as its brief.
+7. **Review:** step "4. Review" spawns `reviewer`, which writes `tmp/team/review-round-<N>.md` ending in `VERDICT: CLEAN` or `VERDICT: FINDINGS`. The lead routes findings back to the owning engineer and loops — no round limit — until a round says `CLEAN`.
+8. **Document:** step "5. Document" spawns `writer` alone — never in parallel with another agent, never before the review verdict is `CLEAN` — to update README/API docs/comments for the files that changed.
+9. **Report:** step "6. Report" confirms the latest review file says `CLEAN`, then the lead reports what changed, AC-to-test coverage, and try-it-yourself steps to the user. The lead never commits.
 
 ---
 
@@ -70,6 +72,8 @@ The codebase has no application layers in the traditional sense — it is a set 
 | **Verdict** | The `reviewer`'s pass/fail line: `VERDICT: CLEAN` (nothing wrong) or `VERDICT: FINDINGS` (listed, routed back to the owning engineer). |
 | **subagent_type** | The Agent-tool parameter the lead passes to spawn a specific agent file by name (e.g. `"backend-engineer"`, `"designer"`). |
 | **Design doc** (`tmp/team/design.md`) | `designer`'s saved output (aesthetic direction, components, design choices) — linked from the handoff so both engineers can read it. |
+| **Type** | The spec's `FEATURE \| BUG \| TICKET` field, written by `interview-me`. `BUG`/`TICKET` gate the pipeline on `ticket-reviewer`; `FEATURE` skips that gate. |
+| **Ticket review** (`tmp/team/ticket-review.md`) | `ticket-reviewer`'s saved report for a BUG/TICKET spec, ending in `STATUS: REPRODUCED \| NOT REPRODUCED \| BLOCKED`. Only `REPRODUCED` lets the pipeline continue. |
 
 ---
 
@@ -88,6 +92,7 @@ Agents are workers spawned by `team-manager`; they have no slash command of thei
 
 1. Edit the fenced `markdown` template block in `skills/interview-me/SKILL.md`.
 2. `skills/team-manager/SKILL.md` step "1. Prepare" hard-depends on an `## Acceptance criteria` heading existing in the spec (it stops and tells the user to run `/interview-me` first if that heading is missing) — preserve that heading name if you rename or restructure template sections.
+3. Step "1. Prepare" also reads the `Type: FEATURE | BUG | TICKET` line to decide whether to gate on `ticket-reviewer` (step "1a. Verify reproduction") — preserve that literal field name and its three values if you touch the template header.
 
 ### Recipe C — Rename a skill or agent
 
@@ -127,6 +132,14 @@ A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/interv
 **Rule:** every implementation task goes through `reviewer`, with no exceptions — regardless of diff size or whether the engineer already ran tests.
 **Why:** `skills/team-manager/SKILL.md`'s own "Never skip the reviewer" table states self-reports are not review, and small diffs still break contracts between layers.
 **What breaks:** a contract break between `backend-engineer` and `frontend-engineer` output ships undetected; fixing it later costs more than the review round would have.
+
+---
+
+**No engineer starts on a BUG/TICKET spec until `ticket-reviewer` says `REPRODUCED`**
+
+**Rule:** step "1a. Verify reproduction" in `skills/team-manager/SKILL.md` runs `ticket-reviewer` alone, before `designer` or either engineer, whenever the spec's `Type:` is `BUG` or `TICKET`. `NOT REPRODUCED` or `BLOCKED` stops the pipeline and reports back to the user instead of proceeding.
+**Why:** building or designing against an unconfirmed bug risks implementing a fix for something that doesn't actually happen, or that happens for a different reason than the ticket describes.
+**What breaks:** skipping this lets an engineer "fix" a symptom that was never reproduced, wasting the round and likely missing the real defect.
 
 ---
 

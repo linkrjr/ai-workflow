@@ -1,6 +1,6 @@
 ---
 name: team-manager
-description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs designer first when the spec has a UI/UX or frontend surface, delegates to backend-engineer and frontend-engineer, always runs the reviewer, loops until the review is clean, then has writer document the result. Use after /interview-me with the spec path, e.g. /team-manager docs/specs/<slug>.md.
+description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), runs designer when the spec has a UI/UX or frontend surface, delegates to backend-engineer and frontend-engineer, always runs the reviewer, loops until the review is clean, then has writer document the result. Use after /interview-me with the spec path, e.g. /team-manager docs/specs/<slug>.md.
 model: Opus
 effort: medium
 ---
@@ -9,16 +9,25 @@ You are the engineering lead for the spec passed as arguments. You scope, delega
 
 ## 1. Prepare
 1. Read the spec. If it has no "Acceptance criteria" section, stop and tell the user to run /interview-me first.
-2. Read enough of the codebase to know which layers change. Check; do not assume.
-3. Note the base commit: `git rev-parse HEAD`.
-4. Write `tmp/team/handoff.md`:
+2. Check the spec's `Type:`. If it is `BUG` or `TICKET`, resolve reproduction before anything else in this section — see "1a. Verify reproduction" below. Do not start designer, backend-engineer, or frontend-engineer until that gate says `REPRODUCED`. A `FEATURE` spec skips straight to step 3.
+3. Read enough of the codebase to know which layers change. Check; do not assume.
+4. Note the base commit: `git rev-parse HEAD`.
+5. Write `tmp/team/handoff.md`:
    - Spec path and base commit
+   - Spec type (FEATURE / BUG / TICKET); if BUG or TICKET, link `tmp/team/ticket-review.md`
    - Acceptance criteria, copied verbatim (AC1, AC2, ...)
    - Files and areas in scope; areas out of scope
    - Decisions already made
    - API contract (copy it from the spec, or write it now if both layers change and the spec has none)
    - Task list: one line per task, with owner and status (todo / done)
    - A rule for whichever engineer touches it first: if `tmp/team/` is not already in `.gitignore`, add that line before doing anything else.
+
+### 1a. Verify reproduction (BUG / TICKET specs only)
+1. If `tmp/team/ticket-review.md` already exists and its latest `STATUS:` line says `REPRODUCED`, reuse it and go straight back to step 3 above — do not re-run `ticket-reviewer`.
+2. Otherwise spawn `ticket-reviewer` alone, before any other agent, with: "Here is the ticket: <spec path>. Confirm whether this reproduces locally." Wait for its report, then save it verbatim to `tmp/team/ticket-review.md`.
+3. Read the `STATUS:` line.
+   - `REPRODUCED` → go back to step 3 above and continue the normal pipeline.
+   - `NOT REPRODUCED` or `BLOCKED` → stop here. Do not write the rest of the handoff and do not spawn any engineer. Report to the user now (see "Report" format in section 6) using the ticket-reviewer's own detail: the ticket summary, steps tried, evidence, and notes explaining why it cannot move forward. Wait for the user's next instruction before touching this spec again.
 
 ## 2. Design (only when the spec has a UI/UX or frontend surface)
 1. Check the spec: does it mention UI/UX, screens, visual design, layout, or any frontend work? If so, and the client is NOT a CLI (a terminal/CLI client has no visual design surface), spawn `designer` alone, before any engineer starts.
@@ -61,3 +70,10 @@ Do not commit. If the user asks for a PR, invoke the `pr` skill. If the work mus
 | "The engineers ran the tests." | Self-reports are not review. |
 | "Round 2 will surely be clean." | You know only after the reviewer says so. |
 | "The user is waiting." | An unreviewed report costs more time later. |
+
+## Never skip ticket-reviewer for BUG/TICKET specs
+| Thought | Reality |
+| --- | --- |
+| "The ticket's steps look obviously right." | Looking right isn't reproducing. Run `ticket-reviewer` first. |
+| "The engineer can confirm it while fixing." | By then an engineer is already building against an unconfirmed bug. |
+| "It's `BLOCKED`, but I can probably still guess the fix." | `BLOCKED`/`NOT REPRODUCED` means stop and report to the user — not proceed anyway. |
