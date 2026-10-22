@@ -12,7 +12,7 @@
 
 ## 1 — Codebase Purpose
 
-This repo is a Claude Code plugin, `team-build-pipeline` (`plugins/team-build-pipeline/.claude-plugin/plugin.json`), and a local marketplace (`.claude-plugin/marketplace.json`) that hosts it for installation. It exposes two slash commands that together turn a feature idea into shipped, reviewed, documented code: `/interview-me` interviews the user into an approved spec, and `/team-manager` runs that spec through a lead-and-subagents pipeline (design, implementation, mandatory review, documentation). It produces no runtime service — its "output" is code changes made elsewhere in whatever repo it's invoked in, plus the spec and coordination files it writes under `docs/specs/` and `tmp/team/`.
+This repo is a Claude Code plugin, `team-build-pipeline` (`plugins/team-build-pipeline/.claude-plugin/plugin.json`), and the marketplace that hosts it (`.claude-plugin/marketplace.json`). It's meant to be published: installed by adding this GitHub repository as a marketplace (`plugin.json`'s `homepage`/`repository` fields point at it), not just run locally out of a clone. It exposes two slash commands that together turn a feature idea into shipped, reviewed, documented code: `/interview-me` interviews the user into an approved spec, and `/team-manager` runs that spec through a lead-and-subagents pipeline (design, implementation, mandatory review, documentation). It produces no runtime service — its "output" is code changes made elsewhere in whatever repo it's invoked in, plus the spec and coordination files it writes under `docs/specs/` and `tmp/team/`.
 
 ---
 

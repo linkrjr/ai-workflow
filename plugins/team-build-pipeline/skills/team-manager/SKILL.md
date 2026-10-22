@@ -25,9 +25,11 @@ You are the engineering lead for the spec passed as arguments. You scope, delega
 ### 1a. Verify reproduction (BUG / TICKET specs only)
 1. If `tmp/team/ticket-review.md` already exists and its latest `STATUS:` line says `REPRODUCED`, reuse it and go straight back to step 3 above — do not re-run `ticket-reviewer`.
 2. Otherwise spawn `ticket-reviewer` alone, before any other agent, with: "Here is the ticket: <spec path>. Confirm whether this reproduces locally." Wait for its report, then save it verbatim to `tmp/team/ticket-review.md`.
-3. Read the `STATUS:` line.
+3. Read the `STATUS:` line. Both non-`REPRODUCED` outcomes stop the pipeline the same way, but for different reasons — surface the actual reason to the user, don't just report the status label:
    - `REPRODUCED` → go back to step 3 above and continue the normal pipeline.
-   - `NOT REPRODUCED` or `BLOCKED` → stop here. Do not write the rest of the handoff and do not spawn any engineer. Nothing has been implemented or reviewed yet, so do not use section 6's format or its "go back to section 4" check — report now, verbatim from `ticket-reviewer`'s output: `STATUS`, `Ticket`, `Steps tried`, `Evidence`, `Notes`. Wait for the user's next instruction before touching this spec again.
+   - `NOT REPRODUCED` → `ticket-reviewer` followed the ticket's own steps and the issue didn't happen — the ticket itself may be wrong, stale, or already fixed. Stop here.
+   - `BLOCKED` → `ticket-reviewer` hit an external obstacle before it could even try (e.g. Playwright not configured, missing access, missing fixture) — the ticket may well be valid once the blocker is cleared. Stop here.
+   - For either stop: do not write the rest of the handoff and do not spawn any engineer. Nothing has been implemented or reviewed yet, so do not use section 6's format or its "go back to section 4" check — report now, verbatim from `ticket-reviewer`'s output: `STATUS`, `Ticket`, `Steps tried`, `Evidence`, `Notes`, plus a one-line explanation (per the distinction above) of why this status means the pipeline can't continue yet. Wait for the user's next instruction before touching this spec again.
 
 ## 2. Design (only when the spec has a UI/UX or frontend surface)
 1. Check the spec: does it mention UI/UX, screens, visual design, layout, or any frontend work? If so, and the client is NOT a CLI (a terminal/CLI client has no visual design surface), spawn `designer` alone, before any engineer starts.

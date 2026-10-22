@@ -111,10 +111,10 @@ All 12 findings from this round applied and verified 2026-10-22. Nothing open.
 
 ---
 
-## Open Questions for the Maintainer
+## Open Questions for the Maintainer — both answered 2026-10-22
 
-1. **What is the intended installation flow?** `marketplace.json` suggests local-only install; the `homepage`/`repository` fields in `plugin.json` suggest it could be published. Carried over from the last audit — still unanswered.
-2. **Should `BLOCKED` and `NOT REPRODUCED` be handled identically by the new reproduction gate?** Right now both statuses stop the pipeline the same way. `NOT REPRODUCED` suggests the ticket itself may be wrong; `BLOCKED` suggests `ticket-reviewer` hit an external obstacle (e.g., Playwright not configured) that a human could clear and then re-run. Is a single stop-and-report the right behavior for both, or should `BLOCKED` support a "fix the blocker, re-run `ticket-reviewer`" loop instead of requiring a fresh `/team-manager` invocation?
+1. **What is the intended installation flow?** — **Answered: this is meant to be a published plugin.** `marketplace.json`'s description no longer says "local," and README §1 now states the install path explicitly: add this GitHub repo as a marketplace, don't just run it out of a clone.
+2. **Should `BLOCKED` and `NOT REPRODUCED` be handled identically by the new reproduction gate?** — **Answered: yes, both stop the pipeline, but the reasons are different and both must be surfaced to the user.** `NOT REPRODUCED` means the reported steps didn't produce the issue (the ticket may be wrong/stale/already fixed); `BLOCKED` means `ticket-reviewer` hit an external obstacle before it could even try (a human can clear it and re-run). `skills/team-manager/SKILL.md` step 1a.3 now spells out both meanings and requires the report to explain which one applies and why, not just echo the status label.
 
 ---
 
