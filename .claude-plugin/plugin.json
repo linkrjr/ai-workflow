@@ -1,5 +1,5 @@
 {
-  "name": "team-build-pipeline",
+  "name": "ai-workflow",
   "version": "1.0.0",
   "description": "AI engineering pipeline with /interview-me (spec approval), /team-manager (orchestrated design→implement→review→document), and /code-audit (codebase audit). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, and writer agents.",
   "author": {
