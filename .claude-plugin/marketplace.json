@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "team-build-pipeline",
-      "source": "./plugins/team-build-pipeline",
+      "source": "./",
       "description": "AI engineering pipeline: /interview-me (spec), /team-manager (design→code→review→docs), /code-audit (audit). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, writer agents."
     }
   ]
