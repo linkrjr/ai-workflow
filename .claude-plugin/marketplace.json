@@ -1,6 +1,6 @@
 {
   "name": "ai-workflow",
-  "description": "Marketplace for the interview-me / team-manager engineering pipeline plugin",
+  "description": "Marketplace for the workshop / orchestrator engineering pipeline plugin",
   "owner": {
     "name": "Ronaldo Gomes"
   },
@@ -8,7 +8,7 @@
     {
       "name": "ai-workflow",
       "source": "./",
-      "description": "AI engineering pipeline: /interview-me (spec), /team-manager (design→code→review→docs), /code-audit (audit). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, writer agents."
+      "description": "AI engineering pipeline: /workshop (spec), /orchestrator (design→code→review→docs), /audit (audit). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, writer agents."
     }
   ]
 }

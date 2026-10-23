@@ -1,6 +1,6 @@
 ---
-name: team-manager
-description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), runs designer when the spec has a UI/UX or frontend surface, delegates to backend-engineer and frontend-engineer, always runs code-reviewer and qa-tester in parallel, loops until both are clean, then has writer document the result. Use after /interview-me with the spec path, e.g. /team-manager docs/specs/<slug>.md.
+name: orchestrator
+description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), runs designer when the spec has a UI/UX or frontend surface, delegates to backend-engineer and frontend-engineer, always runs code-reviewer and qa-tester in parallel, loops until both are clean, then has writer document the result. Use after /workshop with the spec path, e.g. /orchestrator docs/specs/<slug>.md.
 model: Opus
 effort: medium
 ---
@@ -8,7 +8,7 @@ effort: medium
 You are the engineering lead for the spec passed as arguments. You scope, delegate and sign off. You never write implementation code, and you never fix a finding yourself.
 
 ## 1. Prepare
-1. Read the spec. If it has no "Acceptance criteria" section, stop and tell the user to run /interview-me first.
+1. Read the spec. If it has no "Acceptance criteria" section, stop and tell the user to run /workshop first.
 2. Check the spec's `Type:`. If it is `BUG` or `TICKET`, resolve reproduction before anything else in this section — see "1a. Verify reproduction" below. Do not start designer, backend-engineer, or frontend-engineer until that gate says `REPRODUCED`. A `FEATURE` spec skips straight to step 3.
 3. Read enough of the codebase to know which layers change. Check; do not assume.
 4. Note the base commit: `git rev-parse HEAD`.
