@@ -21,6 +21,7 @@ assert_exit1 "no subcommand shows usage" env LINEAR_API_KEY=x ./linear.sh
 assert_exit1 "issue without identifier rejected" env LINEAR_API_KEY=x ./linear.sh issue
 assert_exit1 "team without key rejected" env LINEAR_API_KEY=x ./linear.sh team
 assert_exit1 "search without text rejected" env LINEAR_API_KEY=x ./linear.sh search
+assert_exit1 "create-issue without title rejected" env LINEAR_API_KEY=x ./linear.sh create-issue ENG <<< '{}'
 
 if echo 'mutation { issueCreate }' | LINEAR_API_KEY=x ./linear.sh raw >/dev/null 2>&1; then
   echo "FAIL: mutation guard did not reject a mutation"

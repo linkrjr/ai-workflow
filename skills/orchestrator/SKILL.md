@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), runs designer when the spec has a UI/UX or frontend surface, delegates to backend-engineer and frontend-engineer, always runs code-reviewer and qa-tester in parallel, loops until both are clean, then has writer document the result. Use after /workshop with the spec path, e.g. /orchestrator docs/specs/<slug>.md.
+description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), files one Linear ticket per task after confirming with the user, runs designer when the spec has a UI/UX or frontend surface, delegates to backend-engineer and frontend-engineer, always runs code-reviewer and qa-tester in parallel, loops until both are clean, then has writer document the result. Use after /workshop with the spec path, e.g. /orchestrator docs/specs/<slug>.md.
 model: Opus
 effort: medium
 ---
@@ -19,7 +19,7 @@ You are the engineering lead for the spec passed as arguments. You scope, delega
    - Files and areas in scope; areas out of scope
    - Decisions already made
    - API contract (copy it from the spec, or write it now if both layers change and the spec has none)
-   - Task list: one line per task, with owner and status (todo / done)
+   - Task list: one line per task — task name, the AC IDs it covers, owner, and status (todo / done), e.g. `Add rate limiter — AC1, AC3 — owner: backend-engineer — status: todo`
    - A rule for whichever engineer touches it first: if `tmp/team/` is not already in `.gitignore`, add that line before doing anything else.
 
 ### 1a. Verify reproduction (BUG / TICKET specs only)
@@ -29,21 +29,44 @@ You are the engineering lead for the spec passed as arguments. You scope, delega
    - `REPRODUCED` → go back to step 3 above and continue the normal pipeline.
    - `NOT REPRODUCED` → `ticket-reviewer` followed the ticket's own steps and the issue didn't happen — the ticket itself may be wrong, stale, or already fixed. Stop here.
    - `BLOCKED` → `ticket-reviewer` hit an external obstacle before it could even try (e.g. Playwright not configured, missing access, missing fixture) — the ticket may well be valid once the blocker is cleared. Stop here.
-   - For either stop: do not write the rest of the handoff and do not spawn any engineer. Nothing has been implemented or reviewed yet, so do not use section 6's format or its "go back to section 4" check — report now, verbatim from `ticket-reviewer`'s output: `STATUS`, `Ticket`, `Steps tried`, `Evidence`, `Notes`, plus a one-line explanation (per the distinction above) of why this status means the pipeline can't continue yet. Wait for the user's next instruction before touching this spec again.
+   - For either stop: do not write the rest of the handoff, do not create Linear tickets, and do not spawn any engineer. Nothing has been implemented or reviewed yet, so do not use section 7's format or its "go back to section 5" check — report now, verbatim from `ticket-reviewer`'s output: `STATUS`, `Ticket`, `Steps tried`, `Evidence`, `Notes`, plus a one-line explanation (per the distinction above) of why this status means the pipeline can't continue yet. Wait for the user's next instruction before touching this spec again.
 
-## 2. Design (only when the spec has a UI/UX or frontend surface)
+## 2. Create Linear tickets
+1. Find the Linear team key: check `tmp/team/handoff.md` and the spec for one already named. If neither names one, ask the user — every issue needs a team, this is required.
+2. Find the Linear project name: check the handoff/spec for one already named. If neither names one, ask the user for it.
+3. Build one ticket per line in the handoff's `Task list`:
+   - Title: the task name.
+   - Labels: the task's `owner` value, plus the spec's `Type:` value (`FEATURE` / `BUG` / `TICKET`).
+   - Description:
+     ```
+     ## Description
+     Part of <spec path> (base commit <commit sha>).
+
+     ## Decisions already made
+     <the handoff's "Decisions already made" section, verbatim>
+
+     ## Acceptance Criteria
+     <only the AC lines tagged to this task>
+
+     ## Notes
+     ```
+4. Skip any task whose handoff line already has a `linear:` identifier — it was already filed, most likely by an earlier run of this skill on the same spec.
+5. Show the user every remaining ticket (title, labels, project, description) and wait for confirmation before creating anything. Ticket creation is visible to the whole team and not easily undone — don't skip this unless the user has already pre-approved ticket creation for this run.
+6. For each confirmed ticket, call `scripts/linear.sh create-issue <TEAM_KEY> "<title>"` (see the `linear` skill) with `{"description": "...", "labels": [...], "project": "<PROJECT_NAME>"}` piped in as JSON. If the project name doesn't match an existing Linear project, the command fails loudly — stop and tell the user the project wasn't found; don't guess at a different name or create it. Append the returned identifier to that task's line in `tmp/team/handoff.md` (e.g. `— linear: ENG-42`).
+
+## 3. Design (only when the spec has a UI/UX or frontend surface)
 1. Check the spec: does it mention UI/UX, screens, visual design, layout, or any frontend work? If so, and the client is NOT a CLI (a terminal/CLI client has no visual design surface), spawn `designer` alone, before any engineer starts.
 2. Brief: "Read tmp/team/handoff.md. Produce the UI/UX design and design rationale for this spec."
 3. Wait for `designer` to report, then save its output to `tmp/team/design.md` and add a line to the handoff: `Design doc: tmp/team/design.md` — so backend-engineer and frontend-engineer both read it as part of tmp/team/handoff.md.
 4. Skip this step entirely for CLI-only clients or specs with no UI/UX or frontend surface. Never run `designer` in parallel with an engineer, and never start `frontend-engineer` before this step is done (when it applies).
 
-## 3. Implement
+## 4. Implement
 1. One-layer task: spawn ONE engineer. Do not split a task to use both roles.
 2. Two-layer task: spawn `backend-engineer` and `frontend-engineer` (Agent tool, `subagent_type` = the agent name). The contract must already be in the handoff.
 3. Every brief starts with: "Read tmp/team/handoff.md first. Your tasks: <task IDs>."
 4. Wait for every engineer to report. Update the task list in the handoff when each report arrives.
 
-## 4. Review and QA (mandatory, every task, no exceptions)
+## 5. Review and QA (mandatory, every task, no exceptions)
 1. In a single message, spawn both `code-reviewer` and `qa-tester` in parallel (they are independent: one reads the diff, the other runs the app):
    - `code-reviewer`: "Read tmp/team/handoff.md. Review the diff since <base commit>. This is round <N>. Write your result to tmp/team/review-round-<N>.md."
    - `qa-tester`: "Read tmp/team/handoff.md. QA test the implementation end to end. This is round <N>. Write your result to tmp/team/qa-round-<N>.md."
@@ -51,12 +74,12 @@ You are the engineering lead for the spec passed as arguments. You scope, delega
 3. When the fixes are reported, go back to step 1 with N + 1. There is no round limit.
 4. Stop looping only when the latest review file says `VERDICT: CLEAN` AND the latest QA file says `VERDICT: CLEAN`. A clean code review with a QA round that still has findings (or vice versa) is not done — both gates must be clean on the same round before moving on.
 
-## 5. Document
-Only after step 4 says both files `VERDICT: CLEAN`, and only once no engineer, code-reviewer, or qa-tester agent is still running: spawn `writer` alone, with: "Read tmp/team/handoff.md. Implementation is complete, reviewed clean, and QA passed. Update README/API docs/comments for the files changed in this task."
+## 6. Document
+Only after step 5 says both files `VERDICT: CLEAN`, and only once no engineer, code-reviewer, or qa-tester agent is still running: spawn `writer` alone, with: "Read tmp/team/handoff.md. Implementation is complete, reviewed clean, and QA passed. Update README/API docs/comments for the files changed in this task."
 Wait for it to report before moving on. Do not run `writer` in parallel with any other agent, and do not run it before both gates are clean — it documents the shipped code, not a work-in-progress diff.
 
-## 6. Report
-Before you report, confirm that the latest `tmp/team/review-round-<N>.md` and the latest `tmp/team/qa-round-<N>.md` both say `VERDICT: CLEAN`, from the same round. If either is missing or not clean, you are not done: go back to section 4.
+## 7. Report
+Before you report, confirm that the latest `tmp/team/review-round-<N>.md` and the latest `tmp/team/qa-round-<N>.md` both say `VERDICT: CLEAN`, from the same round. If either is missing or not clean, you are not done: go back to section 5.
 
 Then tell the user:
 - What changed (files, one line each)
