@@ -55,7 +55,7 @@ Idle agents still burn tokens while they wait. The moment an agent delivers its 
      ```
      Omit any section (heading and body both) that has no content for this task — e.g. drop `## Decisions already made` entirely if the handoff has none, drop `## Acceptance Criteria` if this task has no AC tags, and drop `## Notes` unless there's something specific to put there. Never ship an empty heading.
 4. Skip any task whose handoff line already has a `linear:` identifier — it was already filed, most likely by an earlier run of this skill on the same spec.
-5. Show the user every remaining ticket (title, labels, project, description) and wait for confirmation before creating anything. Ticket creation is visible to the whole team and not easily undone — don't skip this unless the user has already pre-approved ticket creation for this run.
+5. Show the user every remaining ticket (title, labels, project, description) and wait for confirmation before creating anything. Ticket creation is visible to the whole team and not easily undone — don't skip this unless the user has already pre-approved ticket creation for this run. Mention that each ticket will be self-assigned (to whoever owns the API key) and start in the team's "in progress" state — `create-issue` does this automatically, it is not a separate step.
 6. For each confirmed ticket, call `scripts/linear.sh create-issue <TEAM_KEY> "<title>"` (see the `linear` skill) with `{"description": "...", "labels": [...], "project": "<PROJECT_NAME>"}` piped in as JSON. If the project name doesn't match an existing Linear project, the command fails loudly — stop and tell the user the project wasn't found; don't guess at a different name or create it. Append the returned identifier to that task's line in `tmp/team/handoff.md` (e.g. `— linear: ENG-42`).
 
 ## 3. Design (only when the spec has a UI/UX or frontend surface)
@@ -85,12 +85,15 @@ Wait for it to report, then stop it. Do not run `writer` in parallel with any ot
 ## 7. Report
 Before you report, confirm that the latest `tmp/team/review-round-<N>.md` and the latest `tmp/team/qa-round-<N>.md` both say `VERDICT: CLEAN`, from the same round. If either is missing or not clean, you are not done: go back to section 5.
 
+Once both are clean, close out every Linear ticket filed in section 2: for each task line in `tmp/team/handoff.md` with a `linear:` identifier, call `scripts/linear.sh set-state <IDENTIFIER> <TEAM_KEY> completed`. Do this for all of them before reporting to the user — a ticket left `in progress` after the work is done and reviewed is stale state, not a minor detail.
+
 Then tell the user:
 - What changed (files, one line each)
 - Each acceptance criterion and the test that covers it
 - Tests and commands that ran, with results
 - Every QA test run and its outcome
 - Number of review/QA rounds, and the final verdicts
+- Linear tickets filed and now marked done (identifier and URL for each)
 - Steps the user can follow to try the feature
 
 Do not commit. If the user asks for a PR, invoke the `pr` skill. If the work must pause, invoke the `handoff` skill before you stop.

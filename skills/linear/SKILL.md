@@ -1,6 +1,6 @@
 ---
 name: linear
-description: Fetch and summarize Linear issues via the GraphQL API directly, no MCP server. Also creates issues (with auto-created labels) for a known team. Use when the user asks about their Linear tickets, a team's backlog, a specific issue like ENG-123, wants to search Linear issues, or needs tickets filed from a spec.
+description: Fetch and summarize Linear issues via the GraphQL API directly, no MCP server. Also creates issues (self-assigned, auto-created labels, set in progress) for a known team, and moves issues between workflow states. Use when the user asks about their Linear tickets, a team's backlog, a specific issue like ENG-123, wants to search Linear issues, or needs tickets filed or closed out from a spec.
 ---
 
 Calls Linear's GraphQL API at https://api.linear.app/graphql through
@@ -22,7 +22,13 @@ print or echo the key.
   optional). Any label name that doesn't already exist on the team is created
   automatically. `project`, if given, must match an existing Linear project by
   name exactly — the project is not created if missing, and the command fails
-  loudly instead of guessing. Prints the created issue's `identifier` and `url`.
+  loudly instead of guessing. The issue is assigned to the API key's own user
+  and set to the team's `started` (in progress) workflow state. Prints the
+  created issue's `identifier` and `url`.
+- `scripts/linear.sh set-state <IDENTIFIER> <TEAM_KEY> <STATE_TYPE>` — moves
+  an existing issue to a workflow state, where `STATE_TYPE` is one of Linear's
+  standard types: `backlog`, `unstarted`, `started`, `completed`, `canceled`.
+  Fails loudly if the team has no state of that type.
 
 Prefer the canned commands above — they're tested and return only the fields
 needed for a summary (identifier, title, state, assignee, priority, url).
@@ -30,15 +36,17 @@ Fall back to `raw` only when the user needs a field or filter none of the
 canned commands expose; `raw` stays read-only on purpose, mutations always go
 through `create-issue` instead.
 
-## Creating issues
+## Creating and updating issues
 
-`create-issue` is the one mutation this skill exposes, and it is scoped
-tightly: one issue, one team, an optional existing project, auto-created
-labels, nothing else (no assignee, no priority, no cycle). Ticket creation is
-visible to the whole team and not easily undone — whoever calls this command
-(e.g. the `orchestrator` skill) is responsible for showing the caller what's
-about to be created and getting a confirmation first. This skill does not
-prompt on its own.
+`create-issue` and `set-state` are the two mutations this skill exposes, and
+both are scoped tightly: `create-issue` is one issue, one team, an optional
+existing project, auto-created labels, self-assignment, and an initial
+`started` state — nothing else (no priority, no cycle). `set-state` only
+moves an issue between existing workflow states, nothing else. Ticket
+creation and state changes are visible to the whole team and not easily
+undone — whoever calls these commands (e.g. the `orchestrator` skill) is
+responsible for showing the caller what's about to happen and getting a
+confirmation first. This skill does not prompt on its own.
 
 ## Setup
 
@@ -47,8 +55,8 @@ prompt on its own.
 
 ## Limits
 
-- Updating or deleting existing issues isn't covered — only read queries and
-  single-issue creation.
+- Deleting issues, and updating fields other than workflow state, isn't
+  covered — only read queries, single-issue creation, and `set-state`.
 - Requires outbound network access to `api.linear.app`. In a sandboxed cloud
   workspace without that host allowlisted, this will fail; use an MCP/connector
   instead in that environment.
