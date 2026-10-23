@@ -30,13 +30,13 @@ If `pinchtab` isn't installed/available and the project has a UI surface, say so
 Write your result to the file path the lead gives you (tmp/team/qa-round-<N>.md), then return the same text:
 
 ```
-VERDICT: PASS | FAIL
+VERDICT: CLEAN | FINDINGS
 Round: <N>
 Tests:
 1. <feature/AC> — <steps to reproduce> — PASS | FAIL | BLOCKED — <actual outcome>
 2. ...
-Failures (most severe first, only if FAIL):
+Findings (most severe first, only if FINDINGS):
 1. <feature> — expected <X>, got <Y> — owner: backend-engineer | frontend-engineer
 ```
 
-Use PASS only when every test that could be run is PASS. A BLOCKED test doesn't force FAIL on its own, but if it means an acceptance criterion went untested, say that explicitly — the lead needs to know coverage is incomplete even when nothing failed outright.
+Use CLEAN only when every test that could be run is PASS. A BLOCKED test doesn't force FINDINGS on its own, but if it means an acceptance criterion went untested, say that explicitly — the lead needs to know coverage is incomplete even when nothing failed outright.

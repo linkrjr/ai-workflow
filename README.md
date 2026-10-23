@@ -59,9 +59,9 @@ The codebase has no application layers in the traditional sense — it is a set 
 3. **Verify reproduction (conditional):** if the spec's `Type:` is `BUG` or `TICKET`, step "1a. Verify reproduction" spawns `ticket-reviewer` alone, before any other agent, and saves its report to `tmp/team/ticket-review.md`. A `REPRODUCED` status continues the pipeline; `NOT REPRODUCED` or `BLOCKED` stops here and reports straight to the user — no designer, no engineer. `FEATURE` specs skip this step entirely.
 4. **Design (conditional):** step "2. Design" spawns `designer` alone, only if the spec has a UI/UX or frontend surface and the client isn't a CLI, and only before any engineer starts. Its output is saved to `tmp/team/design.md` and linked from the handoff.
 5. **Implement:** step "3. Implement" spawns `backend-engineer` and/or `frontend-engineer` depending on which layers change; each reads `tmp/team/handoff.md` as its brief.
-6. **Review and QA:** step "4. Review and QA" spawns `code-reviewer` and `qa-tester` together, in parallel. `code-reviewer` writes `tmp/team/review-round-<N>.md` ending in `VERDICT: CLEAN` or `VERDICT: FINDINGS`; `qa-tester` runs the project locally, exercises every API/UI/CLI surface, and writes `tmp/team/qa-round-<N>.md` ending in `VERDICT: PASS` or `VERDICT: FAIL`. The lead routes every finding/failure back to the owning engineer and loops both agents together — no round limit — until the same round is `CLEAN` and `PASS`.
+6. **Review and QA:** step "4. Review and QA" spawns `code-reviewer` and `qa-tester` together, in parallel. `code-reviewer` writes `tmp/team/review-round-<N>.md` ending in `VERDICT: CLEAN` or `VERDICT: FINDINGS`; `qa-tester` runs the project locally, exercises every API/UI/CLI surface, and writes `tmp/team/qa-round-<N>.md` ending in `VERDICT: CLEAN` or `VERDICT: FINDINGS`. The lead routes every finding back to the owning engineer and loops both agents together — no round limit — until the same round is `CLEAN` for both.
 7. **Document:** step "5. Document" spawns `writer` alone — never in parallel with another agent, never before both gates are clean — to update README/API docs/comments for the files that changed.
-8. **Report:** step "6. Report" confirms the latest review file says `CLEAN` and the latest QA file says `PASS` from the same round, then the lead reports what changed, AC-to-test coverage, every QA test and its outcome, and try-it-yourself steps to the user. The lead never commits.
+8. **Report:** step "6. Report" confirms both the latest review file and the latest QA file say `CLEAN` from the same round, then the lead reports what changed, AC-to-test coverage, every QA test and its outcome, and try-it-yourself steps to the user. The lead never commits.
 
 ---
 
@@ -71,8 +71,8 @@ The codebase has no application layers in the traditional sense — it is a set 
 |---|---|
 | **Handoff** (`tmp/team/handoff.md`) | The shared scope/contract document every subagent reads before starting. Written and updated by the lead (`orchestrator`). |
 | **AC** | Acceptance criteria — numbered (AC1, AC2, …), copied verbatim from the spec into the handoff; each must trace to a test. |
-| **Round** | One paired `code-reviewer` + `qa-tester` pass, recorded as `tmp/team/review-round-<N>.md` and `tmp/team/qa-round-<N>.md`. The implement→review/QA loop repeats with no round limit until the same round is `CLEAN` and `PASS`. |
-| **Verdict** | `code-reviewer`'s pass/fail line (`VERDICT: CLEAN` or `VERDICT: FINDINGS`) and `qa-tester`'s (`VERDICT: PASS` or `VERDICT: FAIL`) — either one failing routes back to the owning engineer. |
+| **Round** | One paired `code-reviewer` + `qa-tester` pass, recorded as `tmp/team/review-round-<N>.md` and `tmp/team/qa-round-<N>.md`. The implement→review/QA loop repeats with no round limit until the same round is `CLEAN` for both. |
+| **Verdict** | `code-reviewer`'s and `qa-tester`'s shared pass/fail line (`VERDICT: CLEAN` or `VERDICT: FINDINGS`) — either one coming back `FINDINGS` routes back to the owning engineer. |
 | **subagent_type** | The Agent-tool parameter the lead passes to spawn a specific agent file by name (e.g. `"backend-engineer"`, `"designer"`). |
 | **Design doc** (`tmp/team/design.md`) | `designer`'s saved output (aesthetic direction, components, design choices) — linked from the handoff so both engineers can read it. |
 | **Type** | The spec's `FEATURE \| BUG \| TICKET` field, written by `workshop`. `BUG`/`TICKET` gate the pipeline on `ticket-reviewer`; `FEATURE` skips that gate. |
@@ -133,7 +133,7 @@ A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/worksh
 
 **Never skip code-reviewer or qa-tester**
 
-**Rule:** every implementation task goes through both `code-reviewer` and `qa-tester`, with no exceptions — regardless of diff size or whether the engineer already ran tests. A clean code review does not excuse a failing (or un-run) QA pass, and vice versa; both must be `CLEAN`/`PASS` on the same round.
+**Rule:** every implementation task goes through both `code-reviewer` and `qa-tester`, with no exceptions — regardless of diff size or whether the engineer already ran tests. A clean code review does not excuse a QA round with findings (or an un-run one), and vice versa; both must be `VERDICT: CLEAN` on the same round.
 **Why:** `skills/orchestrator/SKILL.md`'s own "Never skip code-reviewer or qa-tester" table states self-reports are not review, unit tests are not QA, and small diffs still break contracts between layers or at runtime.
 **What breaks:** a contract break between `backend-engineer` and `frontend-engineer` output ships undetected, or code that passes review still fails when actually run (bad API response, broken UI workflow, crashing CLI flag); fixing it later costs more than the review/QA round would have.
 
@@ -157,7 +157,7 @@ A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/worksh
 
 **`writer` runs alone, and only after both the review and QA verdicts are clean**
 
-**Rule:** step "5. Document" forbids running `writer` in parallel with any other agent, and forbids running it before the latest round says `VERDICT: CLEAN` (review) AND `VERDICT: PASS` (QA).
+**Rule:** step "5. Document" forbids running `writer` in parallel with any other agent, and forbids running it before the latest round says `VERDICT: CLEAN` for both review and QA.
 **Why:** `writer` documents the shipped, reviewed, tested code — not a work-in-progress diff that might still change in the next review/QA round.
 **What breaks:** documentation describes behavior that changes again before the task is actually done, going stale immediately.
 

@@ -47,16 +47,16 @@ You are the engineering lead for the spec passed as arguments. You scope, delega
 1. In a single message, spawn both `code-reviewer` and `qa-tester` in parallel (they are independent: one reads the diff, the other runs the app):
    - `code-reviewer`: "Read tmp/team/handoff.md. Review the diff since <base commit>. This is round <N>. Write your result to tmp/team/review-round-<N>.md."
    - `qa-tester`: "Read tmp/team/handoff.md. QA test the implementation end to end. This is round <N>. Write your result to tmp/team/qa-round-<N>.md."
-2. Wait for both. If `code-reviewer` says FINDINGS and/or `qa-tester` says FAIL, send each finding/failure verbatim to the engineer who owns that area (the owner field names it). Continue the same agent if you can; otherwise spawn a new one with the finding and the handoff path.
+2. Wait for both. If `code-reviewer` and/or `qa-tester` says FINDINGS, send each finding verbatim to the engineer who owns that area (the owner field names it). Continue the same agent if you can; otherwise spawn a new one with the finding and the handoff path.
 3. When the fixes are reported, go back to step 1 with N + 1. There is no round limit.
-4. Stop looping only when the latest review file says `VERDICT: CLEAN` AND the latest QA file says `VERDICT: PASS`. A clean code review with a failing QA round (or vice versa) is not done — both gates must pass on the same round before moving on.
+4. Stop looping only when the latest review file says `VERDICT: CLEAN` AND the latest QA file says `VERDICT: CLEAN`. A clean code review with a QA round that still has findings (or vice versa) is not done — both gates must be clean on the same round before moving on.
 
 ## 5. Document
-Only after step 4 says both `VERDICT: CLEAN` and `VERDICT: PASS`, and only once no engineer, code-reviewer, or qa-tester agent is still running: spawn `writer` alone, with: "Read tmp/team/handoff.md. Implementation is complete, reviewed clean, and QA passed. Update README/API docs/comments for the files changed in this task."
+Only after step 4 says both files `VERDICT: CLEAN`, and only once no engineer, code-reviewer, or qa-tester agent is still running: spawn `writer` alone, with: "Read tmp/team/handoff.md. Implementation is complete, reviewed clean, and QA passed. Update README/API docs/comments for the files changed in this task."
 Wait for it to report before moving on. Do not run `writer` in parallel with any other agent, and do not run it before both gates are clean — it documents the shipped code, not a work-in-progress diff.
 
 ## 6. Report
-Before you report, confirm that the latest `tmp/team/review-round-<N>.md` says `VERDICT: CLEAN` and the latest `tmp/team/qa-round-<N>.md` says `VERDICT: PASS`, both from the same round. If either is missing or not clean, you are not done: go back to section 4.
+Before you report, confirm that the latest `tmp/team/review-round-<N>.md` and the latest `tmp/team/qa-round-<N>.md` both say `VERDICT: CLEAN`, from the same round. If either is missing or not clean, you are not done: go back to section 4.
 
 Then tell the user:
 - What changed (files, one line each)
