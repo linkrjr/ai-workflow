@@ -13,6 +13,7 @@ print or echo the key.
 - `scripts/linear.sh issue <IDENTIFIER>` — one issue by identifier, e.g. `ENG-123`
 - `scripts/linear.sh team <TEAM_KEY> [limit]` — a team's issues (default limit 25)
 - `scripts/linear.sh search <TEXT>` — full-text issue search
+- `scripts/linear.sh projects [limit]` — list Linear projects (id, name; default limit 50) — use this to let a caller pick a project by name before passing it to `create-issue`
 - `scripts/linear.sh raw < query.graphql` — escape hatch for anything the canned
   read queries don't cover; rejects any body containing the word `mutation`
 - `scripts/linear.sh create-issue <TEAM_KEY> <TITLE> < payload.json` — creates

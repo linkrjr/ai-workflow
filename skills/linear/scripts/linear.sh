@@ -14,6 +14,7 @@ usage:
   linear.sh issue <IDENTIFIER>           # e.g. ENG-123
   linear.sh team <TEAM_KEY> [limit]      # e.g. ENG, default limit 25
   linear.sh search <TEXT>
+  linear.sh projects [limit]             # list Linear projects, default limit 50
   linear.sh raw < query.graphql          # escape hatch, read-only only
   linear.sh create-issue <TEAM_KEY> <TITLE> < payload.json
                                           # payload: {"description": "...", "labels": ["a","b"], "project": "Name"}
@@ -122,6 +123,11 @@ case "$cmd" in
     text="${2:-}"; [[ -z "$text" ]] && usage
     query="query(\$term: String!) { issueSearch(term: \$term, first: 25) { nodes { $ISSUE_FIELDS } } }"
     post "$query" "$(jq -n --arg term "$text" '{term: $term}')"
+    ;;
+  projects)
+    limit="${2:-50}"
+    query="query(\$limit: Int!) { projects(first: \$limit) { nodes { id name } } }"
+    post "$query" "$(jq -n --argjson limit "$limit" '{limit: $limit}')"
     ;;
   raw)
     body="$(cat)"

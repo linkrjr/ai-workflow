@@ -33,11 +33,11 @@ You are the engineering lead for the spec passed as arguments. You scope, delega
 
 ## 2. Create Linear tickets
 1. Find the Linear team key: check `tmp/team/handoff.md` and the spec for one already named. If neither names one, ask the user — every issue needs a team, this is required.
-2. Find the Linear project name: check the handoff/spec for one already named. If neither names one, ask the user for it.
+2. Find the Linear project name: check the handoff/spec for one already named. If neither names one, run `scripts/linear.sh projects` and have the user pick from the returned names instead of asking them to type one freely — use AskUserQuestion when there are 4 or fewer projects; otherwise print the full list and ask the user to reply with their choice.
 3. Build one ticket per line in the handoff's `Task list`:
    - Title: the task name.
    - Labels: the task's `owner` value, plus the spec's `Type:` value (`FEATURE` / `BUG` / `TICKET`).
-   - Description:
+   - Description, built from these sections:
      ```
      ## Description
      Part of <spec path> (base commit <commit sha>).
@@ -50,6 +50,7 @@ You are the engineering lead for the spec passed as arguments. You scope, delega
 
      ## Notes
      ```
+     Omit any section (heading and body both) that has no content for this task — e.g. drop `## Decisions already made` entirely if the handoff has none, drop `## Acceptance Criteria` if this task has no AC tags, and drop `## Notes` unless there's something specific to put there. Never ship an empty heading.
 4. Skip any task whose handoff line already has a `linear:` identifier — it was already filed, most likely by an earlier run of this skill on the same spec.
 5. Show the user every remaining ticket (title, labels, project, description) and wait for confirmation before creating anything. Ticket creation is visible to the whole team and not easily undone — don't skip this unless the user has already pre-approved ticket creation for this run.
 6. For each confirmed ticket, call `scripts/linear.sh create-issue <TEAM_KEY> "<title>"` (see the `linear` skill) with `{"description": "...", "labels": [...], "project": "<PROJECT_NAME>"}` piped in as JSON. If the project name doesn't match an existing Linear project, the command fails loudly — stop and tell the user the project wasn't found; don't guess at a different name or create it. Append the returned identifier to that task's line in `tmp/team/handoff.md` (e.g. `— linear: ENG-42`).
