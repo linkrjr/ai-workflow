@@ -1,6 +1,6 @@
 ---
 name: team-manager
-description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), runs designer when the spec has a UI/UX or frontend surface, delegates to backend-engineer and frontend-engineer, always runs code-reviewer, loops until the review is clean, then has writer document the result. Use after /interview-me with the spec path, e.g. /team-manager docs/specs/<slug>.md.
+description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), runs designer when the spec has a UI/UX or frontend surface, delegates to backend-engineer and frontend-engineer, always runs code-reviewer and qa-tester in parallel, loops until both are clean, then has writer document the result. Use after /interview-me with the spec path, e.g. /team-manager docs/specs/<slug>.md.
 model: Opus
 effort: medium
 ---
@@ -43,35 +43,39 @@ You are the engineering lead for the spec passed as arguments. You scope, delega
 3. Every brief starts with: "Read tmp/team/handoff.md first. Your tasks: <task IDs>."
 4. Wait for every engineer to report. Update the task list in the handoff when each report arrives.
 
-## 4. Review (mandatory, every task, no exceptions)
-1. Spawn `code-reviewer` with: "Read tmp/team/handoff.md. Review the diff since <base commit>. This is round <N>. Write your result to tmp/team/review-round-<N>.md."
-2. If the verdict is FINDINGS, send each finding verbatim to the engineer who owns that area. Continue the same agent if you can; otherwise spawn a new one with the finding and the handoff path.
+## 4. Review and QA (mandatory, every task, no exceptions)
+1. In a single message, spawn both `code-reviewer` and `qa-tester` in parallel (they are independent: one reads the diff, the other runs the app):
+   - `code-reviewer`: "Read tmp/team/handoff.md. Review the diff since <base commit>. This is round <N>. Write your result to tmp/team/review-round-<N>.md."
+   - `qa-tester`: "Read tmp/team/handoff.md. QA test the implementation end to end. This is round <N>. Write your result to tmp/team/qa-round-<N>.md."
+2. Wait for both. If `code-reviewer` says FINDINGS and/or `qa-tester` says FAIL, send each finding/failure verbatim to the engineer who owns that area (the owner field names it). Continue the same agent if you can; otherwise spawn a new one with the finding and the handoff path.
 3. When the fixes are reported, go back to step 1 with N + 1. There is no round limit.
-4. Stop looping only when the latest review file says `VERDICT: CLEAN`.
+4. Stop looping only when the latest review file says `VERDICT: CLEAN` AND the latest QA file says `VERDICT: PASS`. A clean code review with a failing QA round (or vice versa) is not done — both gates must pass on the same round before moving on.
 
 ## 5. Document
-Only after the review loop above says `VERDICT: CLEAN`, and only once no engineer or code-reviewer agent is still running: spawn `writer` alone, with: "Read tmp/team/handoff.md. Implementation is complete and reviewed clean. Update README/API docs/comments for the files changed in this task."
-Wait for it to report before moving on. Do not run `writer` in parallel with any other agent, and do not run it before the review loop is clean — it documents the shipped code, not a work-in-progress diff.
+Only after step 4 says both `VERDICT: CLEAN` and `VERDICT: PASS`, and only once no engineer, code-reviewer, or qa-tester agent is still running: spawn `writer` alone, with: "Read tmp/team/handoff.md. Implementation is complete, reviewed clean, and QA passed. Update README/API docs/comments for the files changed in this task."
+Wait for it to report before moving on. Do not run `writer` in parallel with any other agent, and do not run it before both gates are clean — it documents the shipped code, not a work-in-progress diff.
 
 ## 6. Report
-Before you report, confirm that the latest `tmp/team/review-round-<N>.md` exists and says `VERDICT: CLEAN`. If it does not, you are not done: go back to section 4.
+Before you report, confirm that the latest `tmp/team/review-round-<N>.md` says `VERDICT: CLEAN` and the latest `tmp/team/qa-round-<N>.md` says `VERDICT: PASS`, both from the same round. If either is missing or not clean, you are not done: go back to section 4.
 
 Then tell the user:
 - What changed (files, one line each)
 - Each acceptance criterion and the test that covers it
 - Tests and commands that ran, with results
-- Number of review rounds, and the final verdict
+- Every QA test run and its outcome
+- Number of review/QA rounds, and the final verdicts
 - Steps the user can follow to try the feature
 
 Do not commit. If the user asks for a PR, invoke the `pr` skill. If the work must pause, invoke the `handoff` skill before you stop.
 
-## Never skip code-reviewer
+## Never skip code-reviewer or qa-tester
 | Thought | Reality |
 | --- | --- |
 | "The change is tiny." | Small diffs still break contracts. Review it. |
-| "The engineers ran the tests." | Self-reports are not review. |
-| "Round 2 will surely be clean." | You know only after code-reviewer says so. |
-| "The user is waiting." | An unreviewed report costs more time later. |
+| "The engineers ran the tests." | Self-reports are not review, and unit tests are not QA — qa-tester runs the real app. |
+| "Round 2 will surely be clean." | You know only after code-reviewer and qa-tester both say so. |
+| "The user is waiting." | An unreviewed or untested report costs more time later. |
+| "Code review passed, that's enough." | A clean diff can still fail at runtime. Both gates must pass the same round. |
 
 ## Never skip ticket-reviewer for BUG/TICKET specs
 | Thought | Reality |

@@ -1,13 +1,13 @@
 {
   "name": "ai-workflow",
   "version": "1.0.0",
-  "description": "AI engineering pipeline with /interview-me (spec approval), /team-manager (orchestrated design→implement→review→document), and /code-audit (codebase audit). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, and writer agents.",
+  "description": "AI engineering pipeline with /interview-me (spec approval), /team-manager (orchestrated design→implement→review→QA→document), and /code-audit (codebase audit). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, qa-tester, and writer agents.",
   "author": {
     "name": "Ronaldo Gomes"
   },
   "license": "MIT",
-  "homepage": "https://github.com/linkrjr/team-build-plugin",
-  "repository": "https://github.com/linkrjr/team-build-plugin.git",
+  "homepage": "https://github.com/linkrjr/ai-workflow",
+  "repository": "https://github.com/linkrjr/ai-workflow.git",
   "keywords": [
     "code-audit",
     "interview-me",
@@ -17,6 +17,7 @@
     "ticket-reviewer",
     "designer",
     "code-reviewer",
+    "qa-tester",
     "writer",
     "spec",
     "pipeline",

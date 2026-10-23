@@ -1,4 +1,4 @@
-# Tech Debt Audit — team-build-plugin
+# Tech Debt Audit — ai-workflow
 
 **Generated:** 2026-10-22
 **Base commit:** 88803e5
