@@ -1,0 +1,80 @@
+flowchart LR
+    subgraph LANE_USER["User"]
+        direction TB
+        U1["Run /workshop"]
+        U2["Run /orchestrator &lt;spec&gt;"]
+    end
+
+    subgraph LANE_WORKSHOP["workshop skill"]
+        direction TB
+        W1["Interview user,\nwrite spec.md"]
+    end
+
+    subgraph LANE_PREP["orchestrator: Prepare"]
+        direction TB
+        P1["1. Prepare\nwrite handoff.md"] --> P2{"spec\nType?"}
+    end
+
+    subgraph LANE_TR["ticket-reviewer"]
+        direction TB
+        T1["Verify reproduction"]
+    end
+
+    subgraph LANE_ROUTE["orchestrator: Route"]
+        direction TB
+        R1{"STATUS?"} --> R2{"UI/UX\nsurface?"}
+        R1 -->|"NOT REPRODUCED\nor BLOCKED"| R3["Stop, report\nto user"]
+    end
+
+    subgraph LANE_DES["designer"]
+        direction TB
+        D1["Design pass,\nwrite design.md"]
+    end
+
+    subgraph LANE_ENG["backend / frontend engineer"]
+        direction TB
+        E1["3. Implement\nchanges"]
+    end
+
+    subgraph LANE_SPAWN["orchestrator: Review/QA"]
+        direction TB
+        S1["4. Spawn code-reviewer\n+ qa-tester (parallel)"]
+    end
+
+    subgraph LANE_CR["code-reviewer"]
+        direction TB
+        C1["review-round-N.md"]
+    end
+
+    subgraph LANE_QA["qa-tester"]
+        direction TB
+        Q1["qa-round-N.md"]
+    end
+
+    subgraph LANE_LOOP["orchestrator: Loop check"]
+        direction TB
+        L1{"both CLEAN?"}
+    end
+
+    subgraph LANE_WRITER["writer"]
+        direction TB
+        WR1["5. Update docs"]
+    end
+
+    subgraph LANE_REPORT["orchestrator: Report"]
+        direction TB
+        RPT1["6. Report\nto user"]
+    end
+
+    LANE_USER ~~~ LANE_WORKSHOP ~~~ LANE_PREP ~~~ LANE_TR ~~~ LANE_ROUTE ~~~ LANE_DES ~~~ LANE_ENG ~~~ LANE_SPAWN ~~~ LANE_CR ~~~ LANE_QA ~~~ LANE_LOOP ~~~ LANE_WRITER ~~~ LANE_REPORT
+
+    U1 --> W1 --> U2 --> P1
+    P2 -->|"BUG or TICKET"| T1 --> R1
+    P2 -->|FEATURE| R2
+    R2 -->|yes| D1 --> E1
+    R2 -->|no| E1
+    E1 --> S1
+    S1 --> C1 --> L1
+    S1 --> Q1 --> L1
+    L1 -->|"no, findings"| E1
+    L1 -->|yes| WR1 --> RPT1

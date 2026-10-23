@@ -1,0 +1,32 @@
+flowchart LR
+    U[User] -->|"/workshop"| W[workshop skill\nInterviews user, writes spec]
+    W --> SPEC[docs/specs/&lt;slug&gt;.md]
+    SPEC -->|"/orchestrator &lt;spec&gt;"| P[orchestrator: 1. Prepare\nwrites tmp/team/handoff.md]
+
+    P --> TYPE{spec Type?}
+    TYPE -->|BUG or TICKET| TR[ticket-reviewer agent\nVerify reproduction]
+    TYPE -->|FEATURE| DESIGNCHECK
+
+    TR --> STATUS{STATUS}
+    STATUS -->|REPRODUCED| DESIGNCHECK{UI/UX surface?}
+    STATUS -->|NOT REPRODUCED or BLOCKED| STOP[Stop, report to user]
+
+    DESIGNCHECK -->|yes| DES[designer agent\nwrites tmp/team/design.md]
+    DESIGNCHECK -->|no| IMPL[3. Implement]
+    DES --> IMPL
+
+    IMPL --> BE[backend-engineer agent]
+    IMPL --> FE[frontend-engineer agent]
+
+    BE --> RQ[4. Review and QA\nrun in parallel]
+    FE --> RQ
+
+    RQ --> CR[code-reviewer agent\nreview-round-N.md]
+    RQ --> QA[qa-tester agent\nqa-round-N.md]
+
+    CR --> VERDICT{both CLEAN\nsame round?}
+    QA --> VERDICT
+    VERDICT -->|no, findings| IMPL
+    VERDICT -->|yes| DOC[5. Document\nwriter agent]
+
+    DOC --> REPORT[6. Report to user]

@@ -1,0 +1,55 @@
+sequenceDiagram
+    actor User
+    participant Workshop as workshop skill
+    participant Lead as orchestrator (lead)
+    participant TR as ticket-reviewer
+    participant Des as designer
+    participant BE as backend-engineer
+    participant FE as frontend-engineer
+    participant CR as code-reviewer
+    participant QA as qa-tester
+    participant Writer as writer
+
+    User->>Workshop: /workshop
+    Workshop-->>User: docs/specs/<slug>.md
+
+    User->>Lead: /orchestrator <spec>
+    Lead->>Lead: 1. Prepare (write tmp/team/handoff.md)
+
+    alt spec Type is BUG or TICKET
+        Lead->>TR: verify reproduction
+        TR-->>Lead: STATUS: REPRODUCED / NOT REPRODUCED / BLOCKED
+        alt NOT REPRODUCED or BLOCKED
+            Lead-->>User: stop, report
+        end
+    end
+
+    opt UI/UX or frontend surface
+        Lead->>Des: design pass
+        Des-->>Lead: tmp/team/design.md
+    end
+
+    Lead->>BE: implement (backend)
+    Lead->>FE: implement (frontend)
+    BE-->>Lead: changes done
+    FE-->>Lead: changes done
+
+    par Review and QA (parallel)
+        Lead->>CR: review-round-N
+        CR-->>Lead: VERDICT: CLEAN / FINDINGS
+    and
+        Lead->>QA: qa-round-N
+        QA-->>Lead: VERDICT: CLEAN / FINDINGS
+    end
+
+    loop until both CLEAN on same round
+        Lead->>BE: route findings
+        Lead->>FE: route findings
+        Lead->>CR: re-review
+        Lead->>QA: re-test
+    end
+
+    Lead->>Writer: document (alone)
+    Writer-->>Lead: docs updated
+
+    Lead-->>User: 6. Report (AC coverage, QA results, try-it steps)
