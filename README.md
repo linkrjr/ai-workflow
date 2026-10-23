@@ -1,4 +1,4 @@
-# ONBOARDING.md — team-build-pipeline
+# ONBOARDING.md — ai-workflow
 
 ---
 
@@ -12,7 +12,7 @@
 
 ## Codebase Purpose
 
-This repo is a Claude Code plugin, `team-build-pipeline` (`plugins/team-build-pipeline/.claude-plugin/plugin.json`), and the marketplace that hosts it (`.claude-plugin/marketplace.json`). It's meant to be published: installed by adding this GitHub repository as a marketplace (`plugin.json`'s `homepage`/`repository` fields point at it), not just run locally out of a clone. It exposes two slash commands that together turn a feature idea into shipped, reviewed, documented code: `/interview-me` interviews the user into an approved spec, and `/team-manager` runs that spec through a lead-and-subagents pipeline (design, implementation, mandatory review, documentation). It produces no runtime service — its "output" is code changes made elsewhere in whatever repo it's invoked in, plus the spec and coordination files it writes under `docs/specs/` and `tmp/team/`.
+This repo is a Claude Code plugin, `ai-workflow` (`.claude-plugin/plugin.json`), and the marketplace that hosts it (`.claude-plugin/marketplace.json`) — the repo root is the plugin root, same layout as `mattpocock/skills`. It's meant to be published: installed by adding this GitHub repository as a marketplace (`plugin.json`'s `homepage`/`repository` fields point at it), not just run locally out of a clone. It exposes two slash commands that together turn a feature idea into shipped, reviewed, documented code: `/interview-me` interviews the user into an approved spec, and `/team-manager` runs that spec through a lead-and-subagents pipeline (design, implementation, mandatory review, documentation). It produces no runtime service — its "output" is code changes made elsewhere in whatever repo it's invoked in, plus the spec and coordination files it writes under `docs/specs/` and `tmp/team/`.
 
 ---
 
@@ -99,7 +99,7 @@ Agents are workers spawned by `team-manager`; they have no slash command of thei
 
 1. `git mv` the skill/agent file or directory to the new name (skills live at `skills/<name>/SKILL.md`; agents live at `agents/<name>.md`).
 2. Update the `name:` frontmatter field inside the moved file.
-3. Grep for the old name in: every `SKILL.md` and `agents/*.md` file (prose cross-references, e.g. `team-manager` naming `designer`), `plugins/team-build-pipeline/.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json`. None of these read the frontmatter at runtime to resolve the name — every reference is a literal string that must be updated by hand.
+3. Grep for the old name in: every `SKILL.md` and `agents/*.md` file (prose cross-references, e.g. `team-manager` naming `designer`), `.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json`. None of these read the frontmatter at runtime to resolve the name — every reference is a literal string that must be updated by hand.
 
 ### Recipe D — Add a new skill (slash command)
 
@@ -119,7 +119,7 @@ A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/interv
 | "Where does the spec come from, and what must it contain?" | `skills/interview-me/SKILL.md` |
 | "What is `code-reviewer` allowed to do?" | `agents/code-reviewer.md` — note its `tools:` list has no `Edit`/`Write` |
 | "Which agent owns which layer?" | each agent's frontmatter `description:` line |
-| "What does the plugin declare itself as, and how is it installed locally?" | `plugins/team-build-pipeline/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` |
+| "What does the plugin declare itself as, and how is it installed locally?" | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` |
 | "What does a spec actually look like before I run `/team-manager`?" | `examples/todo-reminders-spec.md` |
 
 ---
