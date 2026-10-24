@@ -63,25 +63,18 @@ const costLine = (s: Subagent) => {
 
 const BAR = 20
 
-// The team icon: 16x16 pixels, two per terminal cell (a half block, its colors the two pixels).
+// The team icon: 8x8 pixels, two per terminal cell (a half block, its colors the two pixels).
 const ICON = [
-  '.....Y.YY.Y.....',
-  '.....YYYYYY.....',
-  '.....gggggg.....',
-  '....gGGGGGGg....',
-  '....gGGGGGGg....',
-  '....gGGGGGGg....',
-  '.....gggggg.....',
-  '......w..w......',
-  '.....w.ww.w.....',
-  '....w..ww..w....',
-  '...w...ww...w...',
-  '.ccc..oooo..ccc.',
-  'cCCCc.oOOo.cCCCc',
-  'cCCCc.oOOo.cCCCc',
-  '.ccc..oooo..ccc.',
-  '................',
+  '.Y.YY.Y.',
+  '..YYYY..',
+  '..GGGG..',
+  '..GGGG..',
+  '.w.ww.w.',
+  'w..ww..w',
+  'CC.OO.CC',
+  'CC.OO.CC',
 ]
+const ICON_WIDTH = 8
 const ICON_COLORS: Record<string, number> = {
   Y: 0xfde047, G: 0x4ade80, g: 0x16a34a, w: 0x94a3b8, C: 0x22d3ee, c: 0x0891b2, O: 0xfacc15, o: 0xca8a04,
 }
@@ -90,7 +83,7 @@ const DEFAULT_COLOR = 0x01000000
 const iconCells = () => {
   const words: number[] = []
   for (let y = 0; y < ICON.length; y += 2) {
-    for (let x = 0; x < 16; x++) {
+    for (let x = 0; x < ICON_WIDTH; x++) {
       const top = ICON_COLORS[ICON[y]?.[x] ?? '.']
       const bottom = ICON_COLORS[ICON[y + 1]?.[x] ?? '.']
       // A transparent pixel keeps the terminal's background, so it can never be a foreground.
@@ -250,7 +243,7 @@ export const register: Register = on => {
     return (
       <Box width="100%" flexDirection="column">
         <Box borderStyle="round" paddingX={1} justifyContent="center" alignItems="center">
-          {Raster && <Raster key="icon" columns={16} rows={ICON.length / 2} cells={ICON_CELLS} />}
+          {Raster && <Raster key="icon" columns={ICON_WIDTH} rows={ICON.length / 2} cells={ICON_CELLS} />}
           <Box marginLeft={Raster ? 2 : 0}>
             <Text>
               <Text bold>AGENT TEAMS</Text> - {model} <Text color="green">LEADER</Text>
