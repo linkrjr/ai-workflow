@@ -63,18 +63,22 @@ const costLine = (s: Subagent) => {
 
 const BAR = 20
 
-// The team icon: 8x8 pixels, two per terminal cell (a half block, its colors the two pixels).
+// The team icon: 12x12 pixels, two per terminal cell (a half block, its colors the two pixels).
 const ICON = [
-  '.Y.YY.Y.',
-  '..YYYY..',
-  '..GGGG..',
-  '..GGGG..',
-  '.w.ww.w.',
-  'w..ww..w',
-  'CC.OO.CC',
-  'CC.OO.CC',
+  '...Y.YY.Y...',
+  '...YYYYYY...',
+  '...gGGGGg...',
+  '...gGGGGg...',
+  '....gggg....',
+  '...w.ww.w...',
+  '..w..ww..w..',
+  '.w...ww...w.',
+  '.w...ww...w.',
+  'cCc.oOOo.cCc',
+  'cCc.oOOo.cCc',
+  'ccc.oooo.ccc',
 ]
-const ICON_WIDTH = 8
+const ICON_WIDTH = 12
 const ICON_COLORS: Record<string, number> = {
   Y: 0xfde047, G: 0x4ade80, g: 0x16a34a, w: 0x94a3b8, C: 0x22d3ee, c: 0x0891b2, O: 0xfacc15, o: 0xca8a04,
 }
