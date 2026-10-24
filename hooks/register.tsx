@@ -1,14 +1,23 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { LogLine, Subagent } from '../types'
+import type { Leader, LogLine, Subagent } from '../types'
 
 import { AGENT_ICONS, AGENT_ICON_SIZE, ICON_SIZE, TEAM_ICON, rasterCells } from './icons'
 
 const PANE = 'agent-teams'
 const subagents = atom({ plugin: 'ai-workflow', key: 'subagents' } as const, [] as Subagent[])
 const log = atom({ plugin: 'ai-workflow', key: 'log' } as const, [] as LogLine[])
+const leader = atom({ plugin: 'ai-workflow', key: 'leader' } as const, {
+  status: 'idle',
+  steps: 0,
+  tokens: [0, 0, 0, 0],
+} as Leader)
 const LOG_ROWS = 10
+
+// The two roles' colors: the legend, the leader box and the agents box.
+const LEADER_COLOR = '#cd7b5b'
+const AGENTS_COLOR = '#b4b9f6'
 
 // "claude-opus-5-5[1m]" or "Opus 5.5" -> "OPUS 5.5"
 const shortName = (model: string) => {
@@ -50,16 +59,16 @@ const rates = (model: string) => {
 const formatRate = (r: number) => `$${+r.toFixed(3)}/M`
 
 // "2.0k (1.0k in / 1.0k out)" and "$0.0120 (1.0k×$2/M + 1.0k×$10/M)", zero kinds left out
-const tokenLine = (s: Subagent) => {
-  const total = s.tokens.reduce((a, b) => a + b, 0)
-  const parts = s.tokens.flatMap((n, i) => (n ? [`${formatTokens(n)} ${KINDS[i]}`] : []))
+const tokenLine = (tokens: number[]) => {
+  const total = tokens.reduce((a, b) => a + b, 0)
+  const parts = tokens.flatMap((n, i) => (n ? [`${formatTokens(n)} ${KINDS[i]}`] : []))
   return parts.length ? `${formatTokens(total)} (${parts.join(' / ')})` : '0'
 }
 
-const costLine = (s: Subagent) => {
-  const r = rates(s.model)
-  const cost = s.tokens.reduce((sum, n, i) => sum + (n * (r[i] ?? 0)) / 1e6, 0)
-  const parts = s.tokens.flatMap((n, i) => (n ? [`${formatTokens(n)}×${formatRate(r[i] ?? 0)}`] : []))
+const costLine = (tokens: number[], model: string) => {
+  const r = rates(model)
+  const cost = tokens.reduce((sum, n, i) => sum + (n * (r[i] ?? 0)) / 1e6, 0)
+  const parts = tokens.flatMap((n, i) => (n ? [`${formatTokens(n)}×${formatRate(r[i] ?? 0)}`] : []))
   return parts.length ? `$${cost.toFixed(4)} (${parts.join(' + ')})` : '$0.0000'
 }
 
@@ -156,6 +165,7 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     await patch($, e.agentId, a => ({ ...a, status: 'running' }))
+    if (!e.agentId) await update($, leader, (l): Leader => ({ ...l, status: 'working' }))
     if (!e.agentId && e.text) {
       const p = promptLine(e.text)
       await say($, p.who, p.text)
@@ -170,6 +180,14 @@ export const register: Register = on => {
       steps: a.steps + 1,
       effort: e.effort === undefined ? a.effort : String(e.effort),
     }))
+    if (!e.agentId) {
+      await update($, leader, l => ({
+        ...l,
+        model: shortName(e.model),
+        steps: l.steps + 1,
+        effort: e.effort === undefined ? l.effort : String(e.effort),
+      }))
+    }
     const r = yield* next(e)
     const u = r.usage
     if (u) {
@@ -178,6 +196,12 @@ export const register: Register = on => {
         ...a,
         tokens: a.tokens.map((n, i) => n + (used[i] ?? 0)) as Subagent['tokens'],
       }))
+      if (!e.agentId) {
+        await update($, leader, l => ({
+          ...l,
+          tokens: l.tokens.map((n, i) => n + (used[i] ?? 0)) as Leader['tokens'],
+        }))
+      }
     }
 
     return r
@@ -197,6 +221,7 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
+    if (!e.agentId) await update($, leader, (l): Leader => ({ ...l, status: 'idle' }))
     const sub = (await read($, subagents)).find(a => a.id === e.agentId)
     if (sub) {
       const status = ENDED[e.reason] ?? 'completed'
@@ -212,21 +237,40 @@ export const register: Register = on => {
     const { Box, Text } = els
     const Raster = 'Raster' in els ? els.Raster : undefined
     const model = shortName(await $.session.model())
+    const lead = await read($, leader)
+    const all = await read($, subagents)
     // Only working agents get a box: a finished or idle one is dropped.
-    const subs = (await read($, subagents)).filter(s => s.status === 'running')
+    const subs = all.filter(s => s.status === 'running')
     const lines = (await read($, log)).slice(-LOG_ROWS)
 
     return (
       <Box width="100%" flexDirection="column">
         <Box borderStyle="round" paddingX={1} justifyContent="center" alignItems="center">
           {Raster && <Raster key="icon" columns={ICON_SIZE} rows={ICON_SIZE / 2} cells={ICON_CELLS} />}
-          <Box marginLeft={Raster ? 2 : 0}>
+          <Box marginLeft={Raster ? 2 : 0} flexDirection="column">
             <Text>
-              <Text bold>AGENT TEAMS</Text> - {model} <Text color="green">LEADER</Text>
+              <Text bold>AGENT TEAMS</Text> - {model} <Text color={LEADER_COLOR}>LEADER</Text>
+            </Text>
+            <Text>
+              <Text color={LEADER_COLOR}>●</Text> leader  <Text color={AGENTS_COLOR}>●</Text> agents
             </Text>
           </Box>
         </Box>
-        <Box width="100%" flexDirection="column" borderStyle="round" paddingX={1}>
+        <Box width="100%" flexDirection="column" borderStyle="round" borderColor={LEADER_COLOR} paddingX={1}>
+          <Text>
+            <Text bold color={LEADER_COLOR}>Leader</Text> - {capitalize(model)} -{' '}
+            <Text color={lead.status === 'working' ? 'yellow' : undefined} dimColor={lead.status === 'idle'}>
+              {capitalize(lead.status)}
+            </Text>
+          </Text>
+          <Text>Tokens: {tokenLine(lead.tokens)}</Text>
+          <Text>Cost: {costLine(lead.tokens, lead.model ?? model)}</Text>
+          <Text>Effort: {lead.effort ? capitalize(lead.effort) : '—'}</Text>
+          <Text>
+            Subagents: {subs.length} running · {all.length} started
+          </Text>
+        </Box>
+        <Box width="100%" flexDirection="column" borderStyle="round" borderColor={AGENTS_COLOR} paddingX={1}>
           {subs.length === 0 && <Text dimColor>No running subagents.</Text>}
           {subs.map(s => {
             const done = Math.round(progress(s) * BAR)
@@ -247,8 +291,8 @@ export const register: Register = on => {
                     <Text color="cyan">{'█'.repeat(done)}</Text>
                     <Text dimColor>{'░'.repeat(BAR - done)}</Text> {Math.round(progress(s) * 100)}%
                   </Text>
-                  <Text>Tokens: {tokenLine(s)}</Text>
-                  <Text>Cost: {costLine(s)}</Text>
+                  <Text>Tokens: {tokenLine(s.tokens)}</Text>
+                  <Text>Cost: {costLine(s.tokens, s.model)}</Text>
                   <Text>Effort: {s.effort ? capitalize(s.effort) : '—'}</Text>
                 </Box>
               </Box>

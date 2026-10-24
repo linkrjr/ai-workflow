@@ -14,10 +14,20 @@ export type Subagent = {
   spawnedAt: number
 }
 
+// The main session's own loop: what the leader box shows.
+export type Leader = {
+  status: 'working' | 'idle'
+  // the model of its latest request, as `shortName` spells it
+  model?: string
+  effort?: string
+  steps: number
+  tokens: [number, number, number, number]
+}
+
 export type LogLine = { at: number; who: string; text: string; isError: boolean }
 
 declare module 'claude-code' {
   interface PluginState {
-    'ai-workflow': { subagents: Subagent[]; log: LogLine[] }
+    'ai-workflow': { subagents: Subagent[]; log: LogLine[]; leader: Leader }
   }
 }
