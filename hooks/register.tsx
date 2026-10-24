@@ -204,7 +204,7 @@ export const register: Register = on => {
     const lines = (await read($, log)).slice(-LOG_ROWS)
 
     return (
-      <Box flexDirection="column">
+      <Box width="100%" flexDirection="column">
         <Box borderStyle="round" paddingX={1} justifyContent="center">
           <Text>
             <Text bold>AGENT TEAMS</Text> - {model} <Text color="green">LEADER</Text>
@@ -231,7 +231,7 @@ export const register: Register = on => {
             )
           })}
         </Box>
-        <Box flexDirection="column" borderStyle="round" paddingX={1}>
+        <Box width="100%" flexDirection="column" borderStyle="round" paddingX={1}>
           <Text dimColor>session log</Text>
           {lines.length === 0 && <Text dimColor>Session not started</Text>}
           {lines.map(l => (
