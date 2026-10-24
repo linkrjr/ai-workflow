@@ -61,19 +61,23 @@ const costLine = (s: Subagent) => {
 
 const BAR = 20
 
-// Simulated: no real progress signal exists, so each step closes 15% of the gap; done fills it.
+// Simulated: no real progress signal exists, so each step start and each tool call
+// closes 10% of the gap; a finished turn fills it.
 const progress = (s: Subagent) =>
-  s.status === 'completed' ? 1 : 1 - Math.pow(0.85, s.steps)
+  s.status === 'completed' ? 1 : 1 - Math.pow(0.9, s.steps)
 
 const formatTokens = (n: number) =>
   n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : `${n}`
 
-// ponytail: status refreshes only on a subagent's steps and turns; add a $.clock poll if it lags
-async function refresh($: EngineInterface) {
-  const list = await $.agent.list()
-  await update($, subagents, all =>
-    all.map(a => ({ ...a, status: list.find(l => l.id === a.id)?.status ?? a.status })),
-  )
+// How a subagent's turn ended, as its status.
+const ENDED: Record<string, Subagent['status']> = {
+  answer: 'completed', aborted: 'killed', refusal: 'failed', error: 'failed',
+}
+
+// Applies fn to the subagent with this id; other loops (the leader's, nested ones) are skipped.
+async function patch($: EngineInterface, id: string | undefined, fn: (a: Subagent) => Subagent) {
+  if (!id || !(await read($, subagents)).some(a => a.id === id)) return
+  await update($, subagents, all => all.map(a => (a.id === id ? fn(a) : a)))
 }
 
 export const register: Register = on => {
@@ -100,41 +104,40 @@ export const register: Register = on => {
     return r
   }).catch(($, e, next) => next(e)) // a panel bug must never block a spawn
 
+  on('turn.start', async ($, e, next) => {
+    await patch($, e.agentId, a => ({ ...a, status: 'running' }))
+    return next(e)
+  })
+
   on('turn.step', async function* ($, e, next) {
+    // Tick when the request starts, so the bar moves while the model is still answering.
+    await patch($, e.agentId, a => ({
+      ...a,
+      steps: a.steps + 1,
+      effort: e.effort === undefined ? a.effort : String(e.effort),
+    }))
     const r = yield* next(e)
-    const id = e.agentId
-    if (id && (await read($, subagents)).some(a => a.id === id)) {
-      const u = r.usage
-      const used = u
-        ? [u.input_tokens, u.output_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens]
-        : [0, 0, 0, 0]
-      await update($, subagents, all =>
-        all.map(a =>
-          a.id === id
-            ? {
-                ...a,
-                steps: a.steps + 1,
-                tokens: a.tokens.map((n, i) => n + (used[i] ?? 0)) as Subagent['tokens'],
-                effort: e.effort === undefined ? a.effort : String(e.effort),
-              }
-            : a,
-        ),
-      )
-      await refresh($)
+    const u = r.usage
+    if (u) {
+      const used = [u.input_tokens, u.output_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens]
+      await patch($, e.agentId, a => ({
+        ...a,
+        tokens: a.tokens.map((n, i) => n + (used[i] ?? 0)) as Subagent['tokens'],
+      }))
     }
 
     return r
   })
 
-  on('turn.start', async ($, e, next) => {
+  on('tool.call', async ($, e, next) => {
     const r = await next(e)
-    if (e.agentId) await refresh($)
+    await patch($, e.agentId, a => ({ ...a, steps: a.steps + 1 }))
     return r
-  })
+  }).catch(($, e, next) => next(e)) // a panel bug must never block a tool
 
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
-    if (e.agentId) await refresh($)
+    await patch($, e.agentId, a => ({ ...a, status: ENDED[e.reason] ?? 'completed' }))
     return r
   })
 
