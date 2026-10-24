@@ -74,7 +74,7 @@ test('the pane shows the leader and each subagent it started', async ($, on) => 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await mount(surface)
     const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
-    expect(await text(/AGENT TEAMS/)).toBe('AGENT TEAMS - OPUS 5.5 LEADER')
+    expect(await text(/AGENT TEAMS/)).toBe('AGENT TEAMS - OPUS 5.5 IDLE')
     expect(await text(/^Backend/)).toMatch(/^Backend - Sonnet 5\.5 - \d+s - Running$/)
     expect(await text(/%$/)).toBe(`${'█'.repeat(4)}${'░'.repeat(16)} 19%`)
     expect(await text(/^Tokens: 2/)).toBe('Tokens: 2.0k (1.0k in / 1.0k out)')
@@ -137,6 +137,7 @@ test("the leader box follows the main session's own turns", async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
   expect(await text(/^Leader/)).toBe('Leader - Opus 5.5 - 1s - Working')
+  expect(await text(/^AGENT TEAMS/)).toBe('AGENT TEAMS - OPUS 5.5 WORKING')
   expect(await text(/^Tokens/)).toBe('Tokens: 2.0k (1.0k in / 1.0k out)')
   // 1000 in at $4/M + 1000 out at $20/M
   expect(await text(/^Cost/)).toBe('Cost: $0.0240 (1.0k×$4/M + 1.0k×$20/M)')

@@ -279,7 +279,7 @@ export const register: Register = on => {
           {Raster && <Raster key="icon" columns={ICON_SIZE} rows={ICON_SIZE / 2} cells={ICON_CELLS} />}
           <Box marginLeft={Raster ? 2 : 0} flexDirection="column">
             <Text>
-              <Text bold>AGENT TEAMS</Text> - {model} <Text color={LEADER_COLOR}>LEADER</Text>
+              <Text bold>AGENT TEAMS</Text> - {model} <Text color={LEADER_COLOR}>{lead.status.toUpperCase()}</Text>
             </Text>
             <Text>
               <Text color={LEADER_COLOR}>●</Text> leader  <Text color={AGENTS_COLOR}>●</Text> agents
