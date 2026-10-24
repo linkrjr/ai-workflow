@@ -1,7 +1,8 @@
-// Pixel-art icons drawn as terminal cells: 12x12 pixels, one character per pixel ('.' is
-// transparent), two pixels per cell (a half block, its colors the top and bottom pixel).
+// Pixel-art icons drawn as terminal cells: one character per pixel ('.' is transparent),
+// two pixels per cell (a half block, its colors the top and bottom pixel).
 
 export const ICON_SIZE = 12
+export const AGENT_ICON_SIZE = 10
 
 const PALETTE: Record<string, number> = {
   Y: 0xfde047, // gold
@@ -24,7 +25,7 @@ const PALETTE: Record<string, number> = {
 
 const DEFAULT_COLOR = 0x01000000
 
-// The leader and the agents under it.
+// 12x12: the leader and the agents under it.
 export const TEAM_ICON = [
   '...Y.YY.Y...',
   '...YYYYYY...',
@@ -40,113 +41,99 @@ export const TEAM_ICON = [
   'ccc.oooo.ccc',
 ]
 
-// One per agent of this plugin, keyed by its name (`ai-workflow:<name>` as a subagent type).
+// 10x10, one per agent of this plugin, keyed by its name (`ai-workflow:<name>` as a subagent type).
 export const AGENT_ICONS: Record<string, string[]> = {
   'ticket-reviewer': [
-    '..K......K..',
-    '...K....K...',
-    '....KKKK....',
-    '...KKKKKK...',
-    '...rRRRRr...',
-    'K.rRRKKRRr.K',
-    '.KrRRKKRRrK.',
-    '..rRRKKRRr..',
-    'K.rRRKKRRr.K',
-    '.KrRRKKRRrK.',
-    '...rRKKRr...',
-    '....rrrr....',
+    '.K......K.',
+    '..K....K..',
+    '...KKKK...',
+    '..rRRRRr..',
+    'KrRRKKRRrK',
+    '.rRRKKRRr.',
+    'KrRRKKRRrK',
+    '.rRRKKRRr.',
+    '..rRKKRr..',
+    '...rrrr...',
   ],
   'designer': [
-    '....TTTT....',
-    '..TTTTTTTT..',
-    '.TRRTTTBBTT.',
-    '.TRRTTTBBTTT',
-    'TTTTTTTTTTTT',
-    'TYYTT..TTTTT',
-    'TYYTT..TTTT.',
-    'TTTTTTTTTT..',
-    'TTGGTTPPTT..',
-    '.TGGTTPPT...',
-    '..TTTTTT....',
-    '............',
+    '...TTTT...',
+    '.TTTTTTTT.',
+    'TRRTTTBBTT',
+    'TRRTTTTTTT',
+    'TTTTT..TTT',
+    'TYYTT..TTT',
+    'TYYTTTTTT.',
+    'TTTTTTTTT.',
+    'TGGTTPPT..',
+    '.TTTTTT...',
   ],
   'backend-engineer': [
-    '.bbbbbbbbbb.',
-    '.bwwwwwbGbb.',
-    '.bbbbbbbbbb.',
-    '............',
-    '.bbbbbbbbbb.',
-    '.bwwwwwbGbb.',
-    '.bbbbbbbbbb.',
-    '............',
-    '.bbbbbbbbbb.',
-    '.bwwwwwbObb.',
-    '.bbbbbbbbbb.',
-    '............',
+    '..........',
+    'bbbbbbbbbb',
+    'bwwwwwbGbb',
+    'bbbbbbbbbb',
+    'bwwwwwbGbb',
+    'bbbbbbbbbb',
+    'bwwwwwbObb',
+    'bbbbbbbbbb',
+    '.K......K.',
+    '..........',
   ],
   'frontend-engineer': [
-    '............',
-    'wwwwwwwwwwww',
-    'wRwOwGwwwwww',
-    'wwwwwwwwwwww',
-    'wWWWWWWWWWWw',
-    'wWBBBBWWWWWw',
-    'wWWWWWWWWWWw',
-    'wWCCWWBBBBWw',
-    'wWCCWWWWWWWw',
-    'wWCCWWBBBWWw',
-    'wWWWWWWWWWWw',
-    'wwwwwwwwwwww',
+    'wwwwwwwwww',
+    'wRwOwGwwww',
+    'wwwwwwwwww',
+    'wWWWWWWWWw',
+    'wWBBBBWWWw',
+    'wWWWWWWWWw',
+    'wWCCWBBBWw',
+    'wWCCWWWWWw',
+    'wWWWWWWWWw',
+    'wwwwwwwwww',
   ],
   'code-reviewer': [
-    '..BBBB......',
-    '.B....B.....',
-    'B......B....',
-    'B....G.B....',
-    'B.G.G..B....',
-    'B..G...B....',
-    '.B....BB....',
-    '..BBBB.TT...',
-    '.......TTT..',
-    '........TTT.',
-    '.........TTT',
-    '..........T.',
+    '..BBBB....',
+    '.B....B...',
+    'B......B..',
+    'B....G.B..',
+    'B.G.G..B..',
+    'B..G...B..',
+    '.B....BB..',
+    '..BBBB.TT.',
+    '.......TTT',
+    '........TT',
   ],
   'qa-tester': [
-    '....wwww....',
-    '.....ww.....',
-    '.....ww.....',
-    '.....ww.....',
-    '....wPPw....',
-    '...wPPPPw...',
-    '...wPPPPw...',
-    '..wPPWPPPw..',
-    '..wPPPPPPw..',
-    '.wPPPPPWPPw.',
-    '.wPPPPPPPPw.',
-    '.wwwwwwwwww.',
+    '...wwww...',
+    '....ww....',
+    '....ww....',
+    '...wPPw...',
+    '..wPPPPw..',
+    '..wPPWPw..',
+    '.wPPPPPPw.',
+    '.wPWPPPPw.',
+    'wPPPPPPWPw',
+    'wwwwwwwwww',
   ],
   'writer': [
-    '..........RR',
-    '.........RRr',
-    '........wwr.',
-    '.......OOw..',
-    '......OOo...',
-    '.....OOo....',
-    '....OOo.....',
-    '...OOo......',
-    '..OOo.......',
-    '.TTo........',
-    '.TT.........',
-    'K...........',
+    '........RR',
+    '.......RRr',
+    '......Owr.',
+    '.....OOo..',
+    '....OOo...',
+    '...OOo....',
+    '..OOo.....',
+    '.TOo......',
+    '.TT.......',
+    'K.........',
   ],
 }
 
 // A Raster's `cells`: [codePoint, foreground, background] per cell, little-endian u32, base64.
 export const rasterCells = (rows: string[]) => {
   const words: number[] = []
-  for (let y = 0; y < ICON_SIZE; y += 2) {
-    for (let x = 0; x < ICON_SIZE; x++) {
+  for (let y = 0; y < rows.length; y += 2) {
+    for (let x = 0; x < (rows[0]?.length ?? 0); x++) {
       const top = PALETTE[rows[y]?.[x] ?? '.']
       const bottom = PALETTE[rows[y + 1]?.[x] ?? '.']
       // A transparent pixel keeps the terminal's background, so it can never be a foreground.

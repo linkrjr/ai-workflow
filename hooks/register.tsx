@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { LogLine, Subagent } from '../types'
 
-import { AGENT_ICONS, ICON_SIZE, TEAM_ICON, rasterCells } from './icons'
+import { AGENT_ICONS, AGENT_ICON_SIZE, ICON_SIZE, TEAM_ICON, rasterCells } from './icons'
 
 const PANE = 'agent-teams'
 const subagents = atom({ plugin: 'ai-workflow', key: 'subagents' } as const, [] as Subagent[])
@@ -235,7 +235,7 @@ export const register: Register = on => {
               <Box borderStyle="single" paddingX={1}>
                 {Raster && cells && (
                   <Box marginRight={1} flexShrink={0}>
-                    <Raster key={`agent-${s.id}`} columns={ICON_SIZE} rows={ICON_SIZE / 2} cells={cells} />
+                    <Raster key={`agent-${s.id}`} columns={AGENT_ICON_SIZE} rows={AGENT_ICON_SIZE / 2} cells={cells} />
                   </Box>
                 )}
                 <Box flexDirection="column" flexGrow={1}>
