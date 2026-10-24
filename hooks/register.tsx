@@ -226,7 +226,7 @@ export const register: Register = on => {
             </Text>
           </Box>
         </Box>
-        <Box width="50%" flexDirection="column" borderStyle="round" paddingX={1}>
+        <Box width="100%" flexDirection="column" borderStyle="round" paddingX={1}>
           {subs.length === 0 && <Text dimColor>No running subagents.</Text>}
           {subs.map(s => {
             const done = Math.round(progress(s) * BAR)
