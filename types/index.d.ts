@@ -11,6 +11,6 @@ export type Subagent = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'agent-teams': { subagents: Subagent[] }
+    'ai-workflow': { subagents: Subagent[] }
   }
 }

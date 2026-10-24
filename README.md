@@ -47,6 +47,7 @@ The codebase has no application layers in the traditional sense — it is a set 
 | `code-reviewer` agent | Mandatory, read-only review gate (no Edit/Write tools) | `agents/code-reviewer.md` |
 | `qa-tester` agent | Mandatory, read-only functional gate — runs the project locally and exercises every API/UI/CLI surface, spawned in parallel with `code-reviewer` | `agents/qa-tester.md` |
 | `writer` agent | Final documentation pass, after both review and QA are clean | `agents/writer.md` |
+| Agent teams pane | Opens a right pane on session start: the leader's model, and one box per subagent the leader starts (status, simulated progress, tokens, estimated cost, effort). Costs use a hard-coded price table | `hooks/register.tsx` |
 
 ---
 

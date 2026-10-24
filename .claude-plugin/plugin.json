@@ -24,5 +24,6 @@
     "engineering",
     "architecture",
     "code-review"
-  ]
+  ],
+  "types": "./types/index.d.ts"
 }

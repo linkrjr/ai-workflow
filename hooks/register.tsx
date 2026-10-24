@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Subagent } from '../types'
 
 const PANE = 'agent-teams'
-const subagents = atom({ plugin: 'agent-teams', key: 'subagents' } as const, [] as Subagent[])
+const subagents = atom({ plugin: 'ai-workflow', key: 'subagents' } as const, [] as Subagent[])
 
 // "claude-opus-5-5[1m]" or "Opus 5.5" -> "OPUS 5.5"
 const shortName = (model: string) => {
@@ -98,7 +98,7 @@ export const register: Register = on => {
     }
 
     return r
-  })
+  }).catch(($, e, next) => next(e)) // a panel bug must never block a spawn
 
   on('turn.step', async function* ($, e, next) {
     const r = yield* next(e)

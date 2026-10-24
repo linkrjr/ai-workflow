@@ -1,1 +1,0 @@
-{ "name": "agent-teams", "version": "0.1.0", "description": "Right pane showing the agent team: the leader's model and each subagent it started", "types": "./types/index.d.ts" }

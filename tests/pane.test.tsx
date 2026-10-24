@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 const PANE = {
-  plugin: 'agent-teams',
+  plugin: 'ai-workflow',
   component: 'Pane',
   requestId: 'agent-teams',
   props: {
