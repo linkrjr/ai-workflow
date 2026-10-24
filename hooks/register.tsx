@@ -3,6 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { LogLine, Subagent } from '../types'
 
+import { ICON_SIZE, TEAM_ICON, rasterCells } from './icons'
+
 const PANE = 'agent-teams'
 const subagents = atom({ plugin: 'ai-workflow', key: 'subagents' } as const, [] as Subagent[])
 const log = atom({ plugin: 'ai-workflow', key: 'log' } as const, [] as LogLine[])
@@ -63,44 +65,7 @@ const costLine = (s: Subagent) => {
 
 const BAR = 20
 
-// The team icon: 12x12 pixels, two per terminal cell (a half block, its colors the two pixels).
-const ICON = [
-  '...Y.YY.Y...',
-  '...YYYYYY...',
-  '...gGGGGg...',
-  '...gGGGGg...',
-  '....gggg....',
-  '...w.ww.w...',
-  '..w..ww..w..',
-  '.w...ww...w.',
-  '.w...ww...w.',
-  'cCc.oOOo.cCc',
-  'cCc.oOOo.cCc',
-  'ccc.oooo.ccc',
-]
-const ICON_WIDTH = 12
-const ICON_COLORS: Record<string, number> = {
-  Y: 0xfde047, G: 0x4ade80, g: 0x16a34a, w: 0x94a3b8, C: 0x22d3ee, c: 0x0891b2, O: 0xfacc15, o: 0xca8a04,
-}
-const DEFAULT_COLOR = 0x01000000
-
-const iconCells = () => {
-  const words: number[] = []
-  for (let y = 0; y < ICON.length; y += 2) {
-    for (let x = 0; x < ICON_WIDTH; x++) {
-      const top = ICON_COLORS[ICON[y]?.[x] ?? '.']
-      const bottom = ICON_COLORS[ICON[y + 1]?.[x] ?? '.']
-      // A transparent pixel keeps the terminal's background, so it can never be a foreground.
-      if (top === undefined && bottom === undefined) words.push(0x20, DEFAULT_COLOR, DEFAULT_COLOR)
-      else if (top === undefined) words.push(0x2584, bottom ?? DEFAULT_COLOR, DEFAULT_COLOR)
-      else words.push(0x2580, top, bottom ?? DEFAULT_COLOR)
-    }
-  }
-  // Uint8Array.prototype.toBase64 is in the runtime, not yet in TypeScript's lib.
-  const bytes = new Uint8Array(Uint32Array.from(words).buffer) as Uint8Array & { toBase64(): string }
-  return bytes.toBase64()
-}
-const ICON_CELLS = iconCells()
+const ICON_CELLS = rasterCells(TEAM_ICON)
 
 // Simulated: no real progress signal exists, so each step start and each tool call
 // closes 10% of the gap; a finished turn fills it.
@@ -247,7 +212,7 @@ export const register: Register = on => {
     return (
       <Box width="100%" flexDirection="column">
         <Box borderStyle="round" paddingX={1} justifyContent="center" alignItems="center">
-          {Raster && <Raster key="icon" columns={ICON_WIDTH} rows={ICON.length / 2} cells={ICON_CELLS} />}
+          {Raster && <Raster key="icon" columns={ICON_SIZE} rows={ICON_SIZE / 2} cells={ICON_CELLS} />}
           <Box marginLeft={Raster ? 2 : 0}>
             <Text>
               <Text bold>AGENT TEAMS</Text> - {model} <Text color="green">LEADER</Text>
