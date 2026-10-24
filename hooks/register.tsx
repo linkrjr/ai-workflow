@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { LogLine, Subagent } from '../types'
 
-import { ICON_SIZE, TEAM_ICON, rasterCells } from './icons'
+import { AGENT_ICONS, ICON_SIZE, TEAM_ICON, rasterCells } from './icons'
 
 const PANE = 'agent-teams'
 const subagents = atom({ plugin: 'ai-workflow', key: 'subagents' } as const, [] as Subagent[])
@@ -66,6 +66,12 @@ const costLine = (s: Subagent) => {
 const BAR = 20
 
 const ICON_CELLS = rasterCells(TEAM_ICON)
+const AGENT_CELLS: Record<string, string> = Object.fromEntries(
+  Object.entries(AGENT_ICONS).map(([name, rows]) => [name, rasterCells(rows)]),
+)
+// This plugin's agents by name; another plugin's type has no icon.
+const agentCells = (type: string) =>
+  type.startsWith('ai-workflow:') ? AGENT_CELLS[type.slice('ai-workflow:'.length)] : undefined
 
 // Simulated: no real progress signal exists, so each step start and each tool call
 // closes 10% of the gap; a finished turn fills it.
@@ -137,6 +143,7 @@ export const register: Register = on => {
         status: 'running',
         steps: 0,
         tokens: [0, 0, 0, 0],
+        type: e.subagentType,
         who: shorten(e.description || e.name || e.subagentType, 12),
         spawnedAt: await $.clock.now(),
       }
@@ -223,19 +230,27 @@ export const register: Register = on => {
           {subs.length === 0 && <Text dimColor>No running subagents.</Text>}
           {subs.map(s => {
             const done = Math.round(progress(s) * BAR)
+            const cells = agentCells(s.type)
             return (
-              <Box flexDirection="column" borderStyle="single" paddingX={1}>
-                <Text>
-                  <Text bold>{capitalize(s.name)}</Text> - {capitalize(s.model)} -{' '}
-                  <Text color={STATUS_COLOR[s.status]}>{capitalize(s.status)}</Text>
-                </Text>
-                <Text>
-                  <Text color="cyan">{'█'.repeat(done)}</Text>
-                  <Text dimColor>{'░'.repeat(BAR - done)}</Text> {Math.round(progress(s) * 100)}%
-                </Text>
-                <Text>Tokens: {tokenLine(s)}</Text>
-                <Text>Cost: {costLine(s)}</Text>
-                <Text>Effort: {s.effort ? capitalize(s.effort) : '—'}</Text>
+              <Box borderStyle="single" paddingX={1}>
+                {Raster && cells && (
+                  <Box marginRight={1} flexShrink={0}>
+                    <Raster key={`agent-${s.id}`} columns={ICON_SIZE} rows={ICON_SIZE / 2} cells={cells} />
+                  </Box>
+                )}
+                <Box flexDirection="column" flexGrow={1}>
+                  <Text>
+                    <Text bold>{capitalize(s.name)}</Text> - {capitalize(s.model)} -{' '}
+                    <Text color={STATUS_COLOR[s.status]}>{capitalize(s.status)}</Text>
+                  </Text>
+                  <Text>
+                    <Text color="cyan">{'█'.repeat(done)}</Text>
+                    <Text dimColor>{'░'.repeat(BAR - done)}</Text> {Math.round(progress(s) * 100)}%
+                  </Text>
+                  <Text>Tokens: {tokenLine(s)}</Text>
+                  <Text>Cost: {costLine(s)}</Text>
+                  <Text>Effort: {s.effort ? capitalize(s.effort) : '—'}</Text>
+                </Box>
               </Box>
             )
           })}

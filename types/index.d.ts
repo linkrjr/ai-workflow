@@ -7,6 +7,8 @@ export type Subagent = {
   // tokens by kind, as billed: input, output, cache read, cache write
   tokens: [number, number, number, number]
   effort?: string
+  // the agent type it was spawned as, e.g. `ai-workflow:backend-engineer`
+  type: string
   // the task in a few words, as the session log names the agent
   who: string
   spawnedAt: number

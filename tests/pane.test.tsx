@@ -54,7 +54,7 @@ test('the pane shows the leader and each subagent it started', async ($, on) => 
     prompt: 'go',
     description: 'fix bug',
     name: 'backend',
-    subagentType: 'general-purpose',
+    subagentType: 'ai-workflow:backend-engineer',
     provider: { plugin: 'engine', tier: 'core' },
     parentModel: 'claude-opus-5-5',
     background: true,
@@ -81,6 +81,9 @@ test('the pane shows the leader and each subagent it started', async ($, on) => 
     // 1000 in at $2/M + 1000 out at $10/M
     expect(await text(/^Cost/)).toBe('Cost: $0.0120 (1.0k×$2/M + 1.0k×$10/M)')
     expect(await text(/^Effort/)).toBe('Effort: High')
+    // The agent's icon is a terminal Raster; other surfaces have none.
+    const icon = await ui.find({ type: 'Raster', key: 'agent-a1' })
+    expect(Boolean(icon)).toBe(surface === 'terminal')
     await ui.unmount()
   }
 
