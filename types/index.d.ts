@@ -7,10 +7,15 @@ export type Subagent = {
   // tokens by kind, as billed: input, output, cache read, cache write
   tokens: [number, number, number, number]
   effort?: string
+  // the task in a few words, as the session log names the agent
+  who: string
+  spawnedAt: number
 }
+
+export type LogLine = { at: number; who: string; text: string; isError: boolean }
 
 declare module 'claude-code' {
   interface PluginState {
-    'ai-workflow': { subagents: Subagent[] }
+    'ai-workflow': { subagents: Subagent[]; log: LogLine[] }
   }
 }

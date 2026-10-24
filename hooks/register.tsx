@@ -1,10 +1,12 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Subagent } from '../types'
+import type { LogLine, Subagent } from '../types'
 
 const PANE = 'agent-teams'
 const subagents = atom({ plugin: 'ai-workflow', key: 'subagents' } as const, [] as Subagent[])
+const log = atom({ plugin: 'ai-workflow', key: 'log' } as const, [] as LogLine[])
+const LOG_ROWS = 10
 
 // "claude-opus-5-5[1m]" or "Opus 5.5" -> "OPUS 5.5"
 const shortName = (model: string) => {
@@ -74,6 +76,40 @@ const ENDED: Record<string, Subagent['status']> = {
   answer: 'completed', aborted: 'killed', refusal: 'failed', error: 'failed',
 }
 
+const shorten = (s: string, n: number) => {
+  const one = s.replace(/\s+/g, ' ').trim()
+  return one.length > n ? `${one.slice(0, n - 1).trimEnd()}…` : one
+}
+
+const formatClock = (ms: number) => new Date(ms).toTimeString().slice(0, 8)
+
+const formatDuration = (ms: number) => {
+  const s = Math.round(ms / 1000)
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}s`
+}
+
+// "Edit → todo-app/app.js", "Bash → npm test"; values of secret-looking variables masked.
+const describeCall = (tool: string, input: Record<string, unknown>) => {
+  const str = (k: string) => (typeof input[k] === 'string' ? (input[k] as string) : '')
+  const path = str('file_path').split(/[\\/]/).slice(-2).join('/')
+  const what = str('command') || path || str('pattern') || str('url') || str('description')
+  const line = what ? `${tool} → ${what}` : tool
+  return line.replace(/\b(\w*(?:KEY|TOKEN|SECRET|PASSWORD|SESSION)\w*=)\S+/gi, '$1•••')
+}
+
+// A turn the engine opened with a tagged message (a teammate's, a notification) is the engine's.
+const promptLine = (text: string) => {
+  const tag = /^\s*<([a-z][\w-]*)/i.exec(text)?.[1]
+  return tag
+    ? { who: 'engine', text: tag.replace(/[-_]/g, ' ') }
+    : { who: 'you', text }
+}
+
+async function say($: EngineInterface, who: string, text: string, isError = false) {
+  const line: LogLine = { at: await $.clock.now(), who, text, isError }
+  await update($, log, all => [...all, line].slice(-60))
+}
+
 // Applies fn to the subagent with this id; other loops (the leader's, nested ones) are skipped.
 async function patch($: EngineInterface, id: string | undefined, fn: (a: Subagent) => Subagent) {
   if (!id || !(await read($, subagents)).some(a => a.id === id)) return
@@ -97,8 +133,11 @@ export const register: Register = on => {
         status: 'running',
         steps: 0,
         tokens: [0, 0, 0, 0],
+        who: shorten(e.description || e.name || e.subagentType, 12),
+        spawnedAt: await $.clock.now(),
       }
       await update($, subagents, all => [...all, sub])
+      await say($, sub.who, `spawned · ${e.name || e.subagentType}`)
     }
 
     return r
@@ -106,6 +145,10 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     await patch($, e.agentId, a => ({ ...a, status: 'running' }))
+    if (!e.agentId && e.text) {
+      const p = promptLine(e.text)
+      await say($, p.who, p.text)
+    }
     return next(e)
   })
 
@@ -131,20 +174,34 @@ export const register: Register = on => {
 
   on('tool.call', async ($, e, next) => {
     const r = await next(e)
-    await patch($, e.agentId, a => ({ ...a, steps: a.steps + 1 }))
+    const sub = (await read($, subagents)).find(a => a.id === e.agentId)
+    if (sub) {
+      await patch($, sub.id, a => ({ ...a, steps: a.steps + 1 }))
+      const call = describeCall(e.tool, e as unknown as Record<string, unknown>)
+      if (r.deny !== undefined) await say($, sub.who, `${call}  denied`, true)
+      else await say($, sub.who, r.isError ? `${call}  ✗` : call, r.isError === true)
+    }
     return r
   }).catch(($, e, next) => next(e)) // a panel bug must never block a tool
 
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
-    await patch($, e.agentId, a => ({ ...a, status: ENDED[e.reason] ?? 'completed' }))
+    const sub = (await read($, subagents)).find(a => a.id === e.agentId)
+    if (sub) {
+      const status = ENDED[e.reason] ?? 'completed'
+      await patch($, sub.id, a => ({ ...a, status }))
+      const took = formatDuration((await $.clock.now()) - sub.spawnedAt)
+      await say($, sub.who, status === 'completed' ? `done · ${took}` : status, status !== 'completed')
+    }
     return r
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
     const model = shortName(await $.session.model())
-    const subs = await read($, subagents)
+    // Only working agents get a box: a finished or idle one is dropped.
+    const subs = (await read($, subagents)).filter(s => s.status === 'running')
+    const lines = (await read($, log)).slice(-LOG_ROWS)
 
     return (
       <Box flexDirection="column">
@@ -154,7 +211,7 @@ export const register: Register = on => {
           </Text>
         </Box>
         <Box width="50%" flexDirection="column" borderStyle="round" paddingX={1}>
-          {subs.length === 0 && <Text dimColor>No subagents yet.</Text>}
+          {subs.length === 0 && <Text dimColor>No running subagents.</Text>}
           {subs.map(s => {
             const done = Math.round(progress(s) * BAR)
             return (
@@ -173,6 +230,23 @@ export const register: Register = on => {
               </Box>
             )
           })}
+        </Box>
+        <Box flexDirection="column" borderStyle="round" paddingX={1}>
+          <Text dimColor>session log</Text>
+          {lines.length === 0 && <Text dimColor>Session not started</Text>}
+          {lines.map(l => (
+            <Box>
+              <Box width={9} flexShrink={0}>
+                <Text dimColor>{formatClock(l.at)}</Text>
+              </Box>
+              <Box width={13} flexShrink={0}>
+                <Text bold wrap="truncate">{l.who}</Text>
+              </Box>
+              <Text color={l.isError ? 'red' : undefined} wrap="truncate">
+                {l.text}
+              </Text>
+            </Box>
+          ))}
         </Box>
       </Box>
     )

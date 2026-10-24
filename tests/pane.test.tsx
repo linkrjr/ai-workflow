@@ -17,6 +17,8 @@ const PANE = {
 test('the pane shows the leader and each subagent it started', async ($, on) => {
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
+  let now = Date.parse('2026-10-24T14:43:26')
+  on('clock.now', () => ({ value: (now += 1000) }))
   on('session.model', () => ({ value: 'claude-opus-5-5[1m]' }))
   on('tool.call', () => ({ result: {} }))
   on('turn.complete', (_, e) => ({ text: e.answer }))
@@ -39,6 +41,14 @@ test('the pane shows the leader and each subagent it started', async ($, on) => 
   })
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const mount = (surface: 'terminal' | 'desktop') => $.ui.mount({ ...PANE, surface })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await mount(surface)
+    expect((await ui.find({ type: 'Text', text: /^Session not started$/ }))?.text).toBe('Session not started')
+    await ui.unmount()
+  }
+
   await $.agent.spawn({
     tool_use_id: 't1',
     prompt: 'go',
@@ -61,7 +71,6 @@ test('the pane shows the leader and each subagent it started', async ($, on) => 
 
   await $.tool.call({ tool: 'Bash', command: 'ls', agentId: 'a1' })
 
-  const mount = (surface: 'terminal' | 'desktop') => $.ui.mount({ ...PANE, surface })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await mount(surface)
     const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
@@ -75,13 +84,18 @@ test('the pane shows the leader and each subagent it started', async ($, on) => 
     await ui.unmount()
   }
 
-  // The turn's end reason sets the final status and fills the bar.
+  // A finished agent's box is dropped; the log keeps what it did.
   await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 'x', agentId: 'a1', reason: 'answer' })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await mount(surface)
     const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
-    expect(await text(/^Backend/)).toBe('Backend - Sonnet 5.5 - Completed')
-    expect(await text(/%$/)).toBe(`${'█'.repeat(20)} 100%`)
+    expect(await text(/^Backend/)).toBeUndefined()
+    expect(await text(/^No running subagents/)).toBe('No running subagents.')
+    expect(await text(/^fix bug$/)).toBe('fix bug')
+    expect(await text(/^spawned/)).toBe('spawned · backend')
+    expect(await text(/^Bash/)).toBe('Bash → ls')
+    expect(await text(/^done/)).toBe('done · 3s')
+    expect(await text(/^Session not started/)).toBeUndefined()
     await ui.unmount()
   }
 })
