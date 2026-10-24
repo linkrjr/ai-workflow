@@ -22,12 +22,15 @@ export type Leader = {
   effort?: string
   steps: number
   tokens: [number, number, number, number]
+  // the task: from the person's prompt until the leader is idle with no subagent running
+  taskStartedAt?: number
+  taskEndedAt?: number
 }
 
 export type LogLine = { at: number; who: string; text: string; isError: boolean }
 
 declare module 'claude-code' {
   interface PluginState {
-    'ai-workflow': { subagents: Subagent[]; log: LogLine[]; leader: Leader }
+    'ai-workflow': { subagents: Subagent[]; log: LogLine[]; leader: Leader; tick: number }
   }
 }

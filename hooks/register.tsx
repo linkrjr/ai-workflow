@@ -13,6 +13,8 @@ const leader = atom({ plugin: 'ai-workflow', key: 'leader' } as const, {
   steps: 0,
   tokens: [0, 0, 0, 0],
 } as Leader)
+// Bumped every second while anything runs, so the running times redraw.
+const tick = atom({ plugin: 'ai-workflow', key: 'tick' } as const, 0)
 const LOG_ROWS = 10
 
 // The two roles' colors: the legend, the leader box and the agents box.
@@ -103,8 +105,10 @@ const shorten = (s: string, n: number) => {
 const formatClock = (ms: number) => new Date(ms).toTimeString().slice(0, 8)
 
 const formatDuration = (ms: number) => {
-  const s = Math.round(ms / 1000)
-  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}s`
+  const s = Math.max(0, Math.round(ms / 1000))
+  const m = Math.floor(s / 60)
+  if (s < 60) return `${s}s`
+  return m < 60 ? `${m}m${String(s % 60).padStart(2, '0')}s` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}m`
 }
 
 // "Edit → todo-app/app.js", "Bash → npm test"; values of secret-looking variables masked.
@@ -129,6 +133,15 @@ async function say($: EngineInterface, who: string, text: string, isError = fals
   await update($, log, all => [...all, line].slice(-60))
 }
 
+// Ends the task once the leader is idle and no subagent it started is still running.
+async function endTaskIfDone($: EngineInterface) {
+  const [lead, all] = await Promise.all([read($, leader), read($, subagents)])
+  if (lead.status !== 'idle' || lead.taskStartedAt === undefined || lead.taskEndedAt !== undefined) return
+  if (all.some(a => a.status === 'running')) return
+  const now = await $.clock.now()
+  await update($, leader, l => ({ ...l, taskEndedAt: now }))
+}
+
 // Applies fn to the subagent with this id; other loops (the leader's, nested ones) are skipped.
 async function patch($: EngineInterface, id: string | undefined, fn: (a: Subagent) => Subagent) {
   if (!id || !(await read($, subagents)).some(a => a.id === id)) return
@@ -138,6 +151,13 @@ async function patch($: EngineInterface, id: string | undefined, fn: (a: Subagen
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     void $.ui.open({ id: PANE, title: 'Agent teams' })
+    // ponytail: redraws the whole pane each second while anything runs; a Client module
+    // ticking on the surface (as flightdeck's elapsed.tsx does) if that ever costs too much
+    $.clock.every(1000, async () => {
+      const [lead, all] = await Promise.all([read($, leader), read($, subagents)])
+      const isTaskOpen = lead.taskStartedAt !== undefined && lead.taskEndedAt === undefined
+      if (isTaskOpen || all.some(a => a.status === 'running')) await update($, tick, n => n + 1)
+    })
 
     return next(e)
   })
@@ -169,6 +189,11 @@ export const register: Register = on => {
     if (!e.agentId && e.text) {
       const p = promptLine(e.text)
       await say($, p.who, p.text)
+      // A prompt of the person's starts a task; a turn the engine opens continues it.
+      if (p.who === 'you') {
+        const now = await $.clock.now()
+        await update($, leader, l => ({ ...l, taskStartedAt: now, taskEndedAt: undefined }))
+      }
     }
     return next(e)
   })
@@ -229,6 +254,7 @@ export const register: Register = on => {
       const took = formatDuration((await $.clock.now()) - sub.spawnedAt)
       await say($, sub.who, status === 'completed' ? `done · ${took}` : status, status !== 'completed')
     }
+    await endTaskIfDone($)
     return r
   })
 
@@ -237,8 +263,12 @@ export const register: Register = on => {
     const { Box, Text } = els
     const Raster = 'Raster' in els ? els.Raster : undefined
     const model = shortName(await $.session.model())
+    await read($, tick) // redraw on every tick while anything runs
+    const now = await $.clock.now()
     const lead = await read($, leader)
     const all = await read($, subagents)
+    const taskTime =
+      lead.taskStartedAt === undefined ? '—' : formatDuration((lead.taskEndedAt ?? now) - lead.taskStartedAt)
     // Only working agents get a box: a finished or idle one is dropped.
     const subs = all.filter(s => s.status === 'running')
     const lines = (await read($, log)).slice(-LOG_ROWS)
@@ -258,7 +288,7 @@ export const register: Register = on => {
         </Box>
         <Box width="100%" flexDirection="column" borderStyle="round" borderColor={LEADER_COLOR} paddingX={1}>
           <Text>
-            <Text bold color={LEADER_COLOR}>Leader</Text> - {capitalize(model)} -{' '}
+            <Text bold color={LEADER_COLOR}>Leader</Text> - {capitalize(model)} - {taskTime} -{' '}
             <Text color={lead.status === 'working' ? 'yellow' : undefined} dimColor={lead.status === 'idle'}>
               {capitalize(lead.status)}
             </Text>
@@ -285,6 +315,7 @@ export const register: Register = on => {
                 <Box flexDirection="column" flexGrow={1}>
                   <Text>
                     <Text bold>{capitalize(s.name)}</Text> - {capitalize(s.model)} -{' '}
+                    {formatDuration(now - s.spawnedAt)} -{' '}
                     <Text color={STATUS_COLOR[s.status]}>{capitalize(s.status)}</Text>
                   </Text>
                   <Text>

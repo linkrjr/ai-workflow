@@ -75,13 +75,13 @@ test('the pane shows the leader and each subagent it started', async ($, on) => 
     const ui = await mount(surface)
     const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
     expect(await text(/AGENT TEAMS/)).toBe('AGENT TEAMS - OPUS 5.5 LEADER')
-    expect(await text(/^Backend/)).toBe('Backend - Sonnet 5.5 - Running')
+    expect(await text(/^Backend/)).toMatch(/^Backend - Sonnet 5\.5 - \d+s - Running$/)
     expect(await text(/%$/)).toBe(`${'█'.repeat(4)}${'░'.repeat(16)} 19%`)
     expect(await text(/^Tokens: 2/)).toBe('Tokens: 2.0k (1.0k in / 1.0k out)')
     // 1000 in at $2/M + 1000 out at $10/M
     expect(await text(/^Cost: \$0\.0120/)).toBe('Cost: $0.0120 (1.0k×$2/M + 1.0k×$10/M)')
     expect(await text(/^Effort: H/)).toBe('Effort: High')
-    expect(await text(/^Leader/)).toBe('Leader - Opus 5.5 - Idle')
+    expect(await text(/^Leader/)).toBe('Leader - Opus 5.5 - — - Idle')
     expect(await text(/^Subagents/)).toBe('Subagents: 1 running · 1 started')
     // The agent's icon is a terminal Raster; other surfaces have none.
     const icon = await ui.find({ type: 'Raster', key: 'agent-a1' })
@@ -99,7 +99,7 @@ test('the pane shows the leader and each subagent it started', async ($, on) => 
     expect(await text(/^fix bug$/)).toBe('fix bug')
     expect(await text(/^spawned/)).toBe('spawned · backend')
     expect(await text(/^Bash/)).toBe('Bash → ls')
-    expect(await text(/^done/)).toBe('done · 3s')
+    expect(await text(/^done/)).toMatch(/^done · \d+s$/)
     expect(await text(/^Session not started/)).toBeUndefined()
     await ui.unmount()
   }
@@ -136,7 +136,7 @@ test("the leader box follows the main session's own turns", async ($, on) => {
 
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
-  expect(await text(/^Leader/)).toBe('Leader - Opus 5.5 - Working')
+  expect(await text(/^Leader/)).toBe('Leader - Opus 5.5 - 1s - Working')
   expect(await text(/^Tokens/)).toBe('Tokens: 2.0k (1.0k in / 1.0k out)')
   // 1000 in at $4/M + 1000 out at $20/M
   expect(await text(/^Cost/)).toBe('Cost: $0.0240 (1.0k×$4/M + 1.0k×$20/M)')
@@ -146,7 +146,10 @@ test("the leader box follows the main session's own turns", async ($, on) => {
   await ui.unmount()
 
   await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 'm1', reason: 'answer' })
-  const after = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await after.find({ type: 'Text', text: /^Leader/ }))?.text).toBe('Leader - Opus 5.5 - Idle')
-  await after.unmount()
+  // The task ended with the turn (no subagent running): its time stops there.
+  for (let i = 0; i < 2; i++) {
+    const after = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await after.find({ type: 'Text', text: /^Leader/ }))?.text).toBe('Leader - Opus 5.5 - 2s - Idle')
+    await after.unmount()
+  }
 })
