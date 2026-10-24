@@ -63,6 +63,48 @@ const costLine = (s: Subagent) => {
 
 const BAR = 20
 
+// The team icon: 16x16 pixels, two per terminal cell (a half block, its colors the two pixels).
+const ICON = [
+  '.....Y.YY.Y.....',
+  '.....YYYYYY.....',
+  '.....gggggg.....',
+  '....gGGGGGGg....',
+  '....gGGGGGGg....',
+  '....gGGGGGGg....',
+  '.....gggggg.....',
+  '......w..w......',
+  '.....w.ww.w.....',
+  '....w..ww..w....',
+  '...w...ww...w...',
+  '.ccc..oooo..ccc.',
+  'cCCCc.oOOo.cCCCc',
+  'cCCCc.oOOo.cCCCc',
+  '.ccc..oooo..ccc.',
+  '................',
+]
+const ICON_COLORS: Record<string, number> = {
+  Y: 0xfde047, G: 0x4ade80, g: 0x16a34a, w: 0x94a3b8, C: 0x22d3ee, c: 0x0891b2, O: 0xfacc15, o: 0xca8a04,
+}
+const DEFAULT_COLOR = 0x01000000
+
+const iconCells = () => {
+  const words: number[] = []
+  for (let y = 0; y < ICON.length; y += 2) {
+    for (let x = 0; x < 16; x++) {
+      const top = ICON_COLORS[ICON[y]?.[x] ?? '.']
+      const bottom = ICON_COLORS[ICON[y + 1]?.[x] ?? '.']
+      // A transparent pixel keeps the terminal's background, so it can never be a foreground.
+      if (top === undefined && bottom === undefined) words.push(0x20, DEFAULT_COLOR, DEFAULT_COLOR)
+      else if (top === undefined) words.push(0x2584, bottom ?? DEFAULT_COLOR, DEFAULT_COLOR)
+      else words.push(0x2580, top, bottom ?? DEFAULT_COLOR)
+    }
+  }
+  // Uint8Array.prototype.toBase64 is in the runtime, not yet in TypeScript's lib.
+  const bytes = new Uint8Array(Uint32Array.from(words).buffer) as Uint8Array & { toBase64(): string }
+  return bytes.toBase64()
+}
+const ICON_CELLS = iconCells()
+
 // Simulated: no real progress signal exists, so each step start and each tool call
 // closes 10% of the gap; a finished turn fills it.
 const progress = (s: Subagent) =>
@@ -197,7 +239,9 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const els = $.ui.resolve(e)
+    const { Box, Text } = els
+    const Raster = 'Raster' in els ? els.Raster : undefined
     const model = shortName(await $.session.model())
     // Only working agents get a box: a finished or idle one is dropped.
     const subs = (await read($, subagents)).filter(s => s.status === 'running')
@@ -205,10 +249,13 @@ export const register: Register = on => {
 
     return (
       <Box width="100%" flexDirection="column">
-        <Box borderStyle="round" paddingX={1} justifyContent="center">
-          <Text>
-            <Text bold>AGENT TEAMS</Text> - {model} <Text color="green">LEADER</Text>
-          </Text>
+        <Box borderStyle="round" paddingX={1} justifyContent="center" alignItems="center">
+          {Raster && <Raster key="icon" columns={16} rows={ICON.length / 2} cells={ICON_CELLS} />}
+          <Box marginLeft={Raster ? 2 : 0}>
+            <Text>
+              <Text bold>AGENT TEAMS</Text> - {model} <Text color="green">LEADER</Text>
+            </Text>
+          </Box>
         </Box>
         <Box width="50%" flexDirection="column" borderStyle="round" paddingX={1}>
           {subs.length === 0 && <Text dimColor>No running subagents.</Text>}
