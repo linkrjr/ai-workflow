@@ -154,3 +154,50 @@ test("the leader box follows the main session's own turns", async ($, on) => {
     await after.unmount()
   }
 })
+
+test('a permission ask is held while its call waits, and dropped once it settles', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.check', () => ({ decision: 'ask' as const, reason: 'rm is not allowed by default' }))
+  // Every write of the plugin's asks, in order; the kit's own store sits beneath.
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => (writes.push(e.value), next(e)))
+  let held: unknown
+  on('classic.PermissionRequest', () => {
+    // The person is being asked now: the last write is what the pane shows.
+    held = writes.at(-1)
+    return { decision: { behavior: 'deny' as const } }
+  })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'Bash', command: 'rm -rf build API_KEY=abc123' })
+
+  expect(held).toEqual([
+    {
+      id: expect.any(String),
+      who: 'Leader',
+      tool: 'Bash',
+      label: 'Command',
+      detail: 'rm -rf build API_KEY=•••',
+      reason: 'rm is not allowed by default',
+    },
+  ])
+  expect(writes.at(-1)).toEqual([])
+})
+
+test('the permission box shows each waiting ask', async ($, on) => {
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  const waiting = [
+    { id: 't1', who: 'Backend', tool: 'Bash', label: 'Command', detail: 'rm -rf build', reason: 'rm is not allowed' },
+  ]
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('state.get', { plugin: 'ai-workflow', key: 'asks' }, () => ({ value: { value: waiting, version: 1 } }))
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
+  expect(await text(/^⚠/)).toBe('⚠ Permission · Backend wants to use Bash')
+  expect(await text(/^rm -rf/)).toBe('rm -rf build')
+  expect(await text(/^rm is not/)).toBe('rm is not allowed')
+  expect(await text(/waiting on your answer/)).toBe('Claude is waiting on your answer in the permission prompt')
+  await ui.unmount()
+})

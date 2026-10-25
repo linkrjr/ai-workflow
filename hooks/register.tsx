@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Leader, LogLine, Subagent } from '../types'
+import type { Ask, Leader, LogLine, Subagent } from '../types'
 
 import { AGENT_ICONS, AGENT_ICON_SIZE, TEAM_ICON, TEAM_ICON_SIZE } from './icons'
 import type { Icon } from './icons'
@@ -16,7 +16,9 @@ const leader = atom({ plugin: 'ai-workflow', key: 'leader' } as const, {
 } as Leader)
 // Bumped every second while anything runs, so the running times redraw.
 const tick = atom({ plugin: 'ai-workflow', key: 'tick' } as const, 0)
+const asks = atom({ plugin: 'ai-workflow', key: 'asks' } as const, [] as Ask[])
 const LOG_ROWS = 10
+const ASK_COLOR = 'yellow'
 
 // The two roles' colors: the legend, the leader box and the agents box.
 const LEADER_COLOR = '#cd7b5b'
@@ -109,12 +111,24 @@ const formatDuration = (ms: number) => {
 }
 
 // "Edit → todo-app/app.js", "Bash → npm test"; values of secret-looking variables masked.
+// Values of secret-looking variables masked.
+const mask = (s: string) => s.replace(/\b(\w*(?:KEY|TOKEN|SECRET|PASSWORD|SESSION)\w*=)\S+/gi, '$1•••')
+
 const describeCall = (tool: string, input: Record<string, unknown>) => {
   const str = (k: string) => (typeof input[k] === 'string' ? (input[k] as string) : '')
   const path = str('file_path').split(/[\\/]/).slice(-2).join('/')
   const what = str('command') || path || str('pattern') || str('url') || str('description')
-  const line = what ? `${tool} → ${what}` : tool
-  return line.replace(/\b(\w*(?:KEY|TOKEN|SECRET|PASSWORD|SESSION)\w*=)\S+/gi, '$1•••')
+  return mask(what ? `${tool} → ${what}` : tool)
+}
+
+// What a call asking permission would act on, whole: its command, file, URL or pattern.
+const askDetail = (input: unknown) => {
+  const i = typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {}
+  const fields: [string, string][] = [['command', 'Command'], ['file_path', 'File'], ['url', 'URL'], ['pattern', 'Pattern']]
+  for (const [key, label] of fields) {
+    if (typeof i[key] === 'string') return { label, detail: mask(i[key] as string) }
+  }
+  return { label: 'Input', detail: mask(shorten(JSON.stringify(i), 300)) }
 }
 
 // A turn the engine opened with a tagged message (a teammate's, a notification) is the engine's.
@@ -229,8 +243,28 @@ export const register: Register = on => {
     return r
   })
 
-  on('tool.call', async ($, e, next) => {
+  // An ask the person will answer: shown until its call settles, run or refused.
+  on('tool.check', async ($, e, next) => {
     const r = await next(e)
+    if (r.decision === 'ask' && e.tool_use_id) {
+      const sub = (await read($, subagents)).find(a => a.id === e.agentId)
+      const ask: Ask = {
+        id: e.tool_use_id,
+        who: sub ? capitalize(sub.name) : e.agentId ? 'A subagent' : 'Leader',
+        tool: e.tool,
+        ...askDetail(e.input),
+        reason: r.reason,
+        rule: r.rule,
+      }
+      await update($, asks, all => [...all.filter(a => a.id !== ask.id), ask])
+    }
+    return r
+  }).catch(($, e, next) => next(e)) // a panel bug must never change a verdict
+
+  on('tool.call', async ($, e, next) => {
+    // ponytail: an approved call stays listed until it finishes (a long Bash too); clear on
+    // approval if an event for the person's answer turns up
+    const r = await next(e).finally(() => update($, asks, all => all.filter(a => a.id !== e.tool_use_id)))
     const sub = (await read($, subagents)).find(a => a.id === e.agentId)
     if (sub) {
       await patch($, sub.id, a => ({ ...a, steps: a.steps + 1 }))
@@ -280,6 +314,7 @@ export const register: Register = on => {
     // Only working agents get a box: a finished or idle one is dropped.
     const subs = all.filter(s => s.status === 'running')
     const lines = (await read($, log)).slice(-LOG_ROWS)
+    const waiting = await read($, asks)
 
     return (
       <Box width="100%" flexDirection="column">
@@ -308,6 +343,36 @@ export const register: Register = on => {
             <Text bold>Subagents:</Text> {subs.length} running · {all.length} started
           </Text>
         </Box>
+        {waiting.length > 0 && (
+          <Box width="100%" flexDirection="column" borderStyle="round" borderColor={ASK_COLOR} paddingX={1}>
+            {waiting.map((a, i) => (
+              <Box flexDirection="column" marginTop={i > 0 ? 1 : 0}>
+                <Text bold color={ASK_COLOR}>
+                  ⚠ Permission · {a.who} wants to use {a.tool}
+                </Text>
+                <Box>
+                  <Box width={9} flexShrink={0}>
+                    <Text dimColor>{a.label}</Text>
+                  </Box>
+                  <Text bold>{a.detail}</Text>
+                </Box>
+                {a.reason && (
+                  <Box>
+                    <Box width={9} flexShrink={0}>
+                      <Text dimColor>Why</Text>
+                    </Box>
+                    <Text>{a.rule ? `${a.reason} (${a.rule})` : a.reason}</Text>
+                  </Box>
+                )}
+              </Box>
+            ))}
+            <Box marginTop={1}>
+              <Text dimColor italic>
+                {waiting.length === 1 ? 'Claude is' : `${waiting.length} calls are`} waiting on your answer in the permission prompt
+              </Text>
+            </Box>
+          </Box>
+        )}
         <Box width="100%" flexDirection="column" borderStyle="round" borderColor={AGENTS_COLOR} paddingX={1}>
           {subs.length === 0 && <Text dimColor>No running subagents.</Text>}
           {subs.map(s => {

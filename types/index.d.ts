@@ -27,10 +27,22 @@ export type Leader = {
   taskEndedAt?: number
 }
 
+// A permission request waiting on the person: from its check's ask until its call settles.
+export type Ask = {
+  id: string
+  who: string
+  tool: string
+  // what the call would act on, as `askDetail` names it: `Command`, `File`, ...
+  label: string
+  detail: string
+  reason?: string
+  rule?: string
+}
+
 export type LogLine = { at: number; who: string; text: string; isError: boolean }
 
 declare module 'claude-code' {
   interface PluginState {
-    'ai-workflow': { subagents: Subagent[]; log: LogLine[]; leader: Leader; tick: number }
+    'ai-workflow': { subagents: Subagent[]; log: LogLine[]; leader: Leader; tick: number; asks: Ask[] }
   }
 }
