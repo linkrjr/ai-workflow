@@ -10,6 +10,7 @@ You are scoping a feature from the idea passed as arguments. Stay in product lan
 1. Read the project's README, CLAUDE.md and the code around the idea, so you ask only questions the code cannot answer.
 2. Ask whether this is a FEATURE, a BUG, or a TICKET to triage (recommend FEATURE unless the request already reads like a bug report or links an existing ticket). Record the answer as the spec's `Type:` — /orchestrator uses it to decide whether `ticket-reviewer` must confirm a reproduction before any engineer starts.
 3. Ask ONE question per turn. Make it multiple choice and put your recommendation first. Look facts up instead of asking them.
+   Ask every question with your agent's question tool when it has one (`AskUserQuestion` in Claude Code), so the user picks an option with the arrow keys instead of typing: 2-4 options, the recommended one first with "(Recommended)" at the end of its label, and a one-line description per option. The tool adds a free-text "Other" by itself, so don't add one. Only when no such tool exists, write the options as a numbered list and ask for the number. This covers steps 2 and 5 too.
 4. Keep a list of open decisions. Continue until it is empty. Cover: who can use it, every state (empty, loading, error), limits and defaults, what must stay unchanged, what is out of scope.
 5. Read back the decisions in one list and ask the user to confirm.
 6. Write the spec with the template below. Show it to the user, then save it to docs/specs/<slug>.md after they approve.
