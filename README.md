@@ -14,6 +14,8 @@
 
 This repo is a Claude Code plugin, `ai-workflow` (`.claude-plugin/plugin.json`), and the marketplace that hosts it (`.claude-plugin/marketplace.json`) — the repo root is the plugin root, same layout as `mattpocock/skills`. It's meant to be published: installed by adding this GitHub repository as a marketplace (`plugin.json`'s `homepage`/`repository` fields point at it), not just run locally out of a clone. It exposes two slash commands that together turn a feature idea into shipped, reviewed, documented code: `/workshop` interviews the user into an approved spec, and `/orchestrator` runs that spec through a lead-and-subagents pipeline (design, implementation, mandatory review, documentation). It produces no runtime service — its "output" is code changes made elsewhere in whatever repo it's invoked in, plus the spec and coordination files it writes under `docs/specs/` and `tmp/team/`.
 
+**Other coding agents.** The four skills also install on their own into Cursor, Copilot, Codex and the other agents the [skills CLI](https://github.com/vercel-labs/skills) supports: `pnpm dlx skills add linkrjr/ai-workflow`. Only the skills travel — `agents/` and `hooks/` are Claude Code plugin parts. So `orchestrator` has two modes (see "Two modes: team or solo" in its `SKILL.md`): with the plugin's subagents it delegates as described below; without them it plays each role itself, one after the other, from the copies in `skills/orchestrator/roles/`. Those copies are generated from `agents/*.md` by `scripts/sync-roles.sh` — never edit them by hand.
+
 ---
 
 ## Setup & Prerequisites
@@ -91,6 +93,7 @@ Agents are workers spawned by `orchestrator`; they have no slash command of thei
 2. Add a numbered step to `skills/orchestrator/SKILL.md` stating exactly when the lead spawns it (before/after which existing step) and whether it may run in parallel with another agent — mirror step 2 (Design)'s explicit trigger condition or step 5 (Document)'s explicit exclusivity rule.
 3. If other agents need its output, have it write a file under `tmp/team/` and add one line to the handoff pointing at that file (the pattern `designer` → `tmp/team/design.md` already establishes), rather than editing the consumer agents' own files.
 4. Renumber every subsequent step and fix every `go back to section N` cross-reference in the file.
+5. Run `scripts/sync-roles.sh` so solo mode gets the new role in `skills/orchestrator/roles/`. Do the same after any edit to an `agents/*.md` file; `scripts/sync-roles.sh --check` fails when the copies are stale.
 
 ### Recipe B — Change the spec template
 
@@ -101,7 +104,7 @@ Agents are workers spawned by `orchestrator`; they have no slash command of thei
 ### Recipe C — Rename a skill or agent
 
 1. `git mv` the skill/agent file or directory to the new name (skills live at `skills/<name>/SKILL.md`; agents live at `agents/<name>.md`).
-2. Update the `name:` frontmatter field inside the moved file.
+2. Update the `name:` frontmatter field inside the moved file. For an agent, delete its old `skills/orchestrator/roles/<old>.md` and run `scripts/sync-roles.sh`.
 3. Grep for the old name in: every `SKILL.md` and `agents/*.md` file (prose cross-references, e.g. `orchestrator` naming `designer`), `.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json`. None of these read the frontmatter at runtime to resolve the name — every reference is a literal string that must be updated by hand.
 
 ### Recipe D — Add a new skill (slash command)

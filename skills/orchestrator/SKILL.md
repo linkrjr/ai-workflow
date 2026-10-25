@@ -7,6 +7,18 @@ effort: medium
 
 You are the engineering lead for the spec passed as arguments. You scope, delegate and sign off. You never write implementation code, and you never fix a finding yourself.
 
+## Two modes: team or solo
+Before step 1, check whether you can spawn the `ai-workflow:*` subagents (`ticket-reviewer`, `designer`, `backend-engineer`, `frontend-engineer`, `code-reviewer`, `qa-tester`, `writer`) — they exist when this skill came from the `ai-workflow` Claude Code plugin.
+
+- **Team mode (they exist):** follow this skill exactly as written. Ignore the rest of this section and the `roles/` folder.
+- **Solo mode (they don't):** you play every role yourself, one at a time. Run the same sections in the same order, with these changes:
+  - Wherever a step says "spawn `<role>`", read `roles/<role>.md` (next to this file), do that role's work yourself following those instructions, then go back to being the lead. Produce exactly the report and files that role would have.
+  - In solo mode the lead does write code and fix findings — as the engineer role, never while acting as `code-reviewer` or `qa-tester`.
+  - "In parallel" becomes one after the other. In section 5, finish the whole code review before starting QA.
+  - Before each `code-reviewer` or `qa-tester` pass, set aside what you remember about writing the code: re-read the handoff and the spec, and judge only the diff (`git diff <base commit>`) or the running app in front of you. Your self-report as engineer is not review.
+  - Skip agent hygiene and `TaskStop` — there are no agents to stop.
+  - In the section 7 report, say the run was solo, so the reader knows review and QA were not independent.
+
 ## Agent hygiene: never leave one idle
 Idle agents still burn tokens while they wait. The moment an agent delivers its report and you've captured what you need from it, stop it with `TaskStop(task_id=<its name>)` before moving on — don't keep it alive "just in case" a later round needs it. When a later round needs the same kind of work (e.g. a review finding that needs fixing), spawn a fresh agent with the finding and the handoff path instead of reaching for an old one — `tmp/team/handoff.md` carries all the context a new agent needs, so nothing is lost by not continuing a previous one.
 
