@@ -1,120 +1,23 @@
-// Pixel-art icons drawn as terminal cells: one character per pixel ('.' is transparent),
-// two pixels per cell (a half block, its colors the top and bottom pixel).
+// Icons are PNGs in assets/icons, rendered from the SVG beside each:
+//   rsvg-convert -w 120 -h 120 <agent>.svg -o <agent>.png   (team: -w 240 -h 240)
+// A terminal that cannot draw images shows the Nerd Font glyph instead.
 
-export const ICON_SIZE = 12
-export const AGENT_ICON_SIZE = 6
+export type Icon = { file: string; glyph: string }
 
-const PALETTE: Record<string, number> = {
-  Y: 0xfde047, // gold
-  G: 0x4ade80, // green
-  g: 0x16a34a, // dark green
-  w: 0x94a3b8, // grey
-  C: 0x22d3ee, // cyan
-  c: 0x0891b2, // dark cyan
-  O: 0xfacc15, // yellow
-  o: 0xca8a04, // dark yellow
-  W: 0xf8fafc, // white
-  K: 0x475569, // slate
-  R: 0xef4444, // red
-  r: 0xb91c1c, // dark red
-  B: 0x60a5fa, // blue
-  b: 0x2563eb, // dark blue
-  P: 0xc084fc, // purple
-  T: 0xd6a46c, // tan
-}
+// 12 columns x 6 rows in the header; 6 x 3 beside an agent's box. Cells are about
+// twice as tall as wide, so both boxes are near square.
+export const TEAM_ICON_SIZE = { columns: 12, rows: 6 }
+export const AGENT_ICON_SIZE = { columns: 6, rows: 3 }
 
-const DEFAULT_COLOR = 0x01000000
+export const TEAM_ICON: Icon = { file: 'team.png', glyph: '' } // nf-fa-users
 
-// 12x12: the leader and the agents under it.
-export const TEAM_ICON = [
-  '...Y.YY.Y...',
-  '...YYYYYY...',
-  '...gGGGGg...',
-  '...gGGGGg...',
-  '....gggg....',
-  '...w.ww.w...',
-  '..w..ww..w..',
-  '.w...ww...w.',
-  '.w...ww...w.',
-  'cCc.oOOo.cCc',
-  'cCc.oOOo.cCc',
-  'ccc.oooo.ccc',
-]
-
-// 6x6, one per agent of this plugin, keyed by its name (`ai-workflow:<name>` as a subagent type).
-export const AGENT_ICONS: Record<string, string[]> = {
-  'ticket-reviewer': [
-    'K.KK.K',
-    '.rRRr.',
-    'rRKKRr',
-    'KRKKRK',
-    'rRKKRr',
-    '.rrrr.',
-  ],
-  'designer': [
-    '.TTTT.',
-    'TRTTBT',
-    'TTT.TT',
-    'TYT.TT',
-    'TTTTPT',
-    '.TTTT.',
-  ],
-  'backend-engineer': [
-    'bbbbbb',
-    'bwwbGb',
-    'bbbbbb',
-    'bwwbGb',
-    'bbbbbb',
-    '.K..K.',
-  ],
-  'frontend-engineer': [
-    'wwwwww',
-    'wRwGww',
-    'wWWWWw',
-    'wBBWWw',
-    'wWWBBw',
-    'wwwwww',
-  ],
-  'code-reviewer': [
-    '.BBB..',
-    'B..GB.',
-    'BGG.B.',
-    '.BBB..',
-    '....T.',
-    '.....T',
-  ],
-  'qa-tester': [
-    '.wwww.',
-    '..ww..',
-    '.wPPw.',
-    '.wPWw.',
-    'wPPPPw',
-    'wwwwww',
-  ],
-  'writer': [
-    '....RR',
-    '...wRr',
-    '..OOw.',
-    '.OOo..',
-    '.To...',
-    'K.....',
-  ],
-}
-
-// A Raster's `cells`: [codePoint, foreground, background] per cell, little-endian u32, base64.
-export const rasterCells = (rows: string[]) => {
-  const words: number[] = []
-  for (let y = 0; y < rows.length; y += 2) {
-    for (let x = 0; x < (rows[0]?.length ?? 0); x++) {
-      const top = PALETTE[rows[y]?.[x] ?? '.']
-      const bottom = PALETTE[rows[y + 1]?.[x] ?? '.']
-      // A transparent pixel keeps the terminal's background, so it can never be a foreground.
-      if (top === undefined && bottom === undefined) words.push(0x20, DEFAULT_COLOR, DEFAULT_COLOR)
-      else if (top === undefined) words.push(0x2584, bottom ?? DEFAULT_COLOR, DEFAULT_COLOR)
-      else words.push(0x2580, top, bottom ?? DEFAULT_COLOR)
-    }
-  }
-  // Uint8Array.prototype.toBase64 is in the runtime, not yet in TypeScript's lib.
-  const bytes = new Uint8Array(Uint32Array.from(words).buffer) as Uint8Array & { toBase64(): string }
-  return bytes.toBase64()
+// One per agent of this plugin, keyed by its name (`ai-workflow:<name>` as a subagent type).
+export const AGENT_ICONS: Record<string, Icon> = {
+  'ticket-reviewer': { file: 'ticket-reviewer.png', glyph: '' }, // nf-fa-bug
+  designer: { file: 'designer.png', glyph: '' }, // nf-fa-paint_brush
+  'backend-engineer': { file: 'backend-engineer.png', glyph: '' }, // nf-fa-server
+  'frontend-engineer': { file: 'frontend-engineer.png', glyph: '' }, // nf-cod-browser
+  'code-reviewer': { file: 'code-reviewer.png', glyph: '' }, // nf-fa-search
+  'qa-tester': { file: 'qa-tester.png', glyph: '' }, // nf-fa-flask
+  writer: { file: 'writer.png', glyph: '' }, // nf-fa-pencil
 }

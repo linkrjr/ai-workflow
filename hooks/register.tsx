@@ -3,7 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Leader, LogLine, Subagent } from '../types'
 
-import { AGENT_ICONS, AGENT_ICON_SIZE, ICON_SIZE, TEAM_ICON, rasterCells } from './icons'
+import { AGENT_ICONS, AGENT_ICON_SIZE, TEAM_ICON, TEAM_ICON_SIZE } from './icons'
+import type { Icon } from './icons'
 
 const PANE = 'agent-teams'
 const subagents = atom({ plugin: 'ai-workflow', key: 'subagents' } as const, [] as Subagent[])
@@ -76,13 +77,9 @@ const costLine = (tokens: number[], model: string) => {
 
 const BAR = 20
 
-const ICON_CELLS = rasterCells(TEAM_ICON)
-const AGENT_CELLS: Record<string, string> = Object.fromEntries(
-  Object.entries(AGENT_ICONS).map(([name, rows]) => [name, rasterCells(rows)]),
-)
 // This plugin's agents by name; another plugin's type has no icon.
-const agentCells = (type: string) =>
-  type.startsWith('ai-workflow:') ? AGENT_CELLS[type.slice('ai-workflow:'.length)] : undefined
+const agentIcon = (type: string) =>
+  type.startsWith('ai-workflow:') ? AGENT_ICONS[type.slice('ai-workflow:'.length)] : undefined
 
 // Simulated: no real progress signal exists, so each step start and each tool call
 // closes 10% of the gap; a finished turn fills it.
@@ -261,7 +258,18 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e)
     const { Box, Text } = els
-    const Raster = 'Raster' in els ? els.Raster : undefined
+    const Image = 'Image' in els ? els.Image : undefined
+    // The terminal reads the PNG itself; where it cannot draw one, the glyph shows instead.
+    const icon = (key: string, i: Icon, size: { columns: number; rows: number }) =>
+      Image && (
+        <Image
+          key={key}
+          source={{ file: `${$.plugin.root}/assets/icons/${i.file}`, format: 'png' }}
+          columns={size.columns}
+          rows={size.rows}
+          alt={i.glyph}
+        />
+      )
     const model = shortName(await $.session.model())
     await read($, tick) // redraw on every tick while anything runs
     const now = await $.clock.now()
@@ -276,8 +284,8 @@ export const register: Register = on => {
     return (
       <Box width="100%" flexDirection="column">
         <Box borderStyle="round" paddingX={1} justifyContent="center" alignItems="center">
-          {Raster && <Raster key="icon" columns={ICON_SIZE} rows={ICON_SIZE / 2} cells={ICON_CELLS} />}
-          <Box marginLeft={Raster ? 2 : 0} flexDirection="column">
+          {icon('team', TEAM_ICON, TEAM_ICON_SIZE)}
+          <Box marginLeft={Image ? 2 : 0} flexDirection="column">
             <Text>
               <Text bold>AGENT TEAMS</Text> - {model} <Text color={LEADER_COLOR}>{lead.status.toUpperCase()}</Text>
             </Text>
@@ -304,12 +312,12 @@ export const register: Register = on => {
           {subs.length === 0 && <Text dimColor>No running subagents.</Text>}
           {subs.map(s => {
             const done = Math.round(progress(s) * BAR)
-            const cells = agentCells(s.type)
+            const agent = agentIcon(s.type)
             return (
               <Box borderStyle="single" paddingX={1}>
-                {Raster && cells && (
+                {Image && agent && (
                   <Box marginRight={1} flexShrink={0}>
-                    <Raster key={`agent-${s.id}`} columns={AGENT_ICON_SIZE} rows={AGENT_ICON_SIZE / 2} cells={cells} />
+                    {icon(`agent-${s.id}`, agent, AGENT_ICON_SIZE)}
                   </Box>
                 )}
                 <Box flexDirection="column" flexGrow={1}>

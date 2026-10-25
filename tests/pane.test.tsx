@@ -83,8 +83,8 @@ test('the pane shows the leader and each subagent it started', async ($, on) => 
     expect(await text(/^Effort: H/)).toBe('Effort: High')
     expect(await text(/^Leader/)).toBe('Leader - Opus 5.5 - — - Idle')
     expect(await text(/^Subagents/)).toBe('Subagents: 1 running · 1 started')
-    // The agent's icon is a terminal Raster; other surfaces have none.
-    const icon = await ui.find({ type: 'Raster', key: 'agent-a1' })
+    // The agent's icon is a terminal Image; other surfaces have none.
+    const icon = await ui.find({ type: 'Image', key: 'agent-a1' })
     expect(Boolean(icon)).toBe(surface === 'terminal')
     await ui.unmount()
   }
