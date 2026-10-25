@@ -287,7 +287,7 @@ export const register: Register = on => {
           {icon('team', TEAM_ICON, TEAM_ICON_SIZE)}
           <Box marginLeft={Image ? 2 : 0} flexDirection="column">
             <Text>
-              <Text bold>AGENT TEAMS</Text> - {model} <Text color={LEADER_COLOR}>{lead.status.toUpperCase()}</Text>
+              <Text bold>AGENT TEAMS</Text> - {model} <Text bold color={LEADER_COLOR}>{lead.status.toUpperCase()}</Text>
             </Text>
             <Text>
               <Text color={LEADER_COLOR}>●</Text> leader  <Text color={AGENTS_COLOR}>●</Text> agents
@@ -297,15 +297,15 @@ export const register: Register = on => {
         <Box width="100%" flexDirection="column" borderStyle="round" borderColor={LEADER_COLOR} paddingX={1}>
           <Text>
             <Text bold color={LEADER_COLOR}>Leader</Text> - {capitalize(model)} - {taskTime} -{' '}
-            <Text color={lead.status === 'working' ? 'yellow' : undefined} dimColor={lead.status === 'idle'}>
+            <Text bold color={lead.status === 'working' ? 'yellow' : undefined} dimColor={lead.status === 'idle'}>
               {capitalize(lead.status)}
             </Text>
           </Text>
-          <Text>Tokens: {tokenLine(lead.tokens)}</Text>
-          <Text>Cost: {costLine(lead.tokens, lead.model ?? model)}</Text>
-          <Text>Effort: {lead.effort ? capitalize(lead.effort) : '—'}</Text>
+          <Text><Text bold>Tokens:</Text> {tokenLine(lead.tokens)}</Text>
+          <Text><Text bold>Cost:</Text> {costLine(lead.tokens, lead.model ?? model)}</Text>
+          <Text><Text bold>Effort:</Text> {lead.effort ? capitalize(lead.effort) : '—'}</Text>
           <Text>
-            Subagents: {subs.length} running · {all.length} started
+            <Text bold>Subagents:</Text> {subs.length} running · {all.length} started
           </Text>
         </Box>
         <Box width="100%" flexDirection="column" borderStyle="round" borderColor={AGENTS_COLOR} paddingX={1}>
@@ -324,15 +324,15 @@ export const register: Register = on => {
                   <Text>
                     <Text bold>{capitalize(s.name)}</Text> - {capitalize(s.model)} -{' '}
                     {formatDuration(now - s.spawnedAt)} -{' '}
-                    <Text color={STATUS_COLOR[s.status]}>{capitalize(s.status)}</Text>
+                    <Text bold color={STATUS_COLOR[s.status]}>{capitalize(s.status)}</Text>
                   </Text>
                   <Text>
                     <Text color="cyan">{'█'.repeat(done)}</Text>
                     <Text dimColor>{'░'.repeat(BAR - done)}</Text> {Math.round(progress(s) * 100)}%
                   </Text>
-                  <Text>Tokens: {tokenLine(s.tokens)}</Text>
-                  <Text>Cost: {costLine(s.tokens, s.model)}</Text>
-                  <Text>Effort: {s.effort ? capitalize(s.effort) : '—'}</Text>
+                  <Text><Text bold>Tokens:</Text> {tokenLine(s.tokens)}</Text>
+                  <Text><Text bold>Cost:</Text> {costLine(s.tokens, s.model)}</Text>
+                  <Text><Text bold>Effort:</Text> {s.effort ? capitalize(s.effort) : '—'}</Text>
                 </Box>
               </Box>
             )
