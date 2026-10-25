@@ -1,6 +1,6 @@
 {
   "name": "ai-workflow",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "AI engineering pipeline with /workshop (spec approval), /orchestrator (orchestrated design→implement→review→QA→document), and /audit (codebase audit). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, qa-tester, and writer agents.",
   "author": {
     "name": "Ronaldo Gomes"
