@@ -16,6 +16,11 @@ Before step 1, check whether you can spawn the `ai-workflow:*` subagents (`ticke
   - In solo mode the lead does write code and fix findings — as the engineer role, never while acting as `code-reviewer` or `qa-tester`.
   - "In parallel" becomes one after the other. In section 5, finish the whole code review before starting QA.
   - Before each `code-reviewer` or `qa-tester` pass, set aside what you remember about writing the code: re-read the handoff and the spec, and judge only the diff (`git diff <base commit>`) or the running app in front of you. Your self-report as engineer is not review.
+  - Findings go back to the lead, never straight to a fix. As `code-reviewer` or `qa-tester` you only write the round's file (`tmp/team/review-round-<N>.md`, `tmp/team/qa-round-<N>.md`); you never edit code during a review or QA pass, even for a one-line fix. Once both files for round N are written, switch back to lead and run this loop:
+    1. Read both files. If both say `VERDICT: CLEAN`, go on to section 6.
+    2. Otherwise add one line per finding to the handoff's task list: `Fix <finding> — round <N> — owner: <role from the finding> — status: todo`.
+    3. Work those lines one at a time as the owner role (read `roles/<role>.md` again), marking each `done` in the handoff as you finish.
+    4. Run section 5 again as round N + 1: a full code review, then full QA, both from scratch. A fix can break something the last round passed, so never re-check only the findings. There is no round limit.
   - Skip agent hygiene and `TaskStop` — there are no agents to stop.
   - In the section 7 report, say the run was solo, so the reader knows review and QA were not independent.
 
