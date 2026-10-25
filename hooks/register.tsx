@@ -410,7 +410,10 @@ export const register: Register = on => {
                   <Box width={9} flexShrink={0}>
                     <Text dimColor>{a.label}</Text>
                   </Box>
-                  <Text bold>{a.detail}</Text>
+                  {/* One line: a long or multi-line command is cut at the panel's edge with an ellipsis. */}
+                  <Text bold wrap="truncate-end">
+                    {a.detail.replace(/\s+/g, ' ')}
+                  </Text>
                 </Box>
                 {a.reason && (
                   <Box>
