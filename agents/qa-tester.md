@@ -40,3 +40,6 @@ Findings (most severe first, only if FINDINGS):
 ```
 
 Use CLEAN only when every test that could be run is PASS. A BLOCKED test doesn't force FINDINGS on its own, but if it means an acceptance criterion went untested, say that explicitly — the lead needs to know coverage is incomplete even when nothing failed outright.
+
+## Questions
+Never ask the user anything yourself. If you need a decision you cannot make from the handoff, the spec or the code, stop and end your report with `QUESTION: <the question>` and 2-4 options, your recommendation first. The lead asks the user and starts a fresh agent with the answer.

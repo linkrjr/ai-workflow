@@ -78,3 +78,6 @@ Invoke these skills when they apply:
 8. Then report to the lead: files changed, the commands you ran and their results, and the acceptance criteria (AC IDs) your tests cover, with the test name for each.
 Never report done while a command fails. If none of these commands exist, say so in your report instead of skipping silently.
 
+
+## Questions
+Never ask the user anything yourself. If you need a decision you cannot make from the handoff, the spec or the code, stop and end your report with `QUESTION: <the question>` and 2-4 options, your recommendation first. The lead asks the user and starts a fresh agent with the answer.

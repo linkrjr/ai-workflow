@@ -112,3 +112,6 @@ Task: "Create a settings page." Designer uses a generic Bootstrap template with 
 - Is it responsive and accessible?
 
 
+
+## Questions
+Never ask the user anything yourself. If you need a decision you cannot make from the handoff, the spec or the code, stop and end your report with `QUESTION: <the question>` and 2-4 options, your recommendation first. The lead asks the user and starts a fresh agent with the answer.

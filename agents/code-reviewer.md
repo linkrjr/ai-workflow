@@ -43,3 +43,6 @@ Findings (most severe first):
 1. <file:line> — <defect> — owner: backend-engineer | frontend-engineer
 
 Use CLEAN only when there is no finding. Never invent a finding to look thorough, and never edit code.
+
+## Questions
+Never ask the user anything yourself. If you need a decision you cannot make from the handoff, the spec or the code, stop and end your report with `QUESTION: <the question>` and 2-4 options, your recommendation first. The lead asks the user and starts a fresh agent with the answer.
