@@ -37,6 +37,8 @@ export type Ask = {
   detail: string
   reason?: string
   rule?: string
+  // answered from the pane (Proceed / Cancel); otherwise the engine's prompt asks
+  isAnswerable: boolean
 }
 
 export type LogLine = { at: number; who: string; text: string; isError: boolean }

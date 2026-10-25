@@ -180,6 +180,7 @@ test('a permission ask is held while its call waits, and dropped once it settles
       label: 'Command',
       detail: 'rm -rf build API_KEY=•••',
       reason: 'rm is not allowed by default',
+      isAnswerable: false,
     },
   ])
   expect(writes.at(-1)).toEqual([])
@@ -188,7 +189,7 @@ test('a permission ask is held while its call waits, and dropped once it settles
 test('the permission box shows each waiting ask', async ($, on) => {
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
   const waiting = [
-    { id: 't1', who: 'Backend', tool: 'Bash', label: 'Command', detail: 'rm -rf build', reason: 'rm is not allowed' },
+    { id: 't1', who: 'Backend', tool: 'Bash', label: 'Command', detail: 'rm -rf build', reason: 'rm is not allowed', isAnswerable: false },
   ]
   on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
   on('state.get', { plugin: 'ai-workflow', key: 'asks' }, () => ({ value: { value: waiting, version: 1 } }))
@@ -200,4 +201,71 @@ test('the permission box shows each waiting ask', async ($, on) => {
   expect(await text(/^rm is not/)).toBe('rm is not allowed')
   expect(await text(/waiting on your answer/)).toBe('Claude is waiting on your answer in the permission prompt')
   await ui.unmount()
+})
+
+test('Proceed in the pane answers an ask a person would', async ($, on) => {
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.check', () => ({ decision: 'ask' as const, reason: 'rm is not allowed by default' }))
+  // The wait's sleep: never ends by itself, only when the pane's answer kills it.
+  on('process.spawn', async function* (_, e, next) {
+    await new Promise<void>(resolve => next.signal.addEventListener('abort', () => resolve()))
+    return { value: { code: null, signal: 'SIGTERM' } }
+  })
+
+  let stored!: () => void
+  const isStored = new Promise<void>(resolve => (stored = resolve))
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => {
+    if (e.value.some(a => a.isAnswerable)) stored()
+    return next(e)
+  })
+
+  const verdict = $.tool.check({
+    tool: 'Bash',
+    input: { command: 'rm -rf build' },
+    tool_use_id: 't1',
+    approver: 'person',
+  })
+  await isStored
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /waiting on your answer/ }))?.text).toBe('  Claude is waiting on your answer')
+  await ui.press({ key: 'proceed-t1' })
+  await ui.unmount()
+
+  expect((await verdict).decision).toBe('allow')
+})
+
+test('Cancel above the prompt refuses an ask a person would answer', async ($, on) => {
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.check', () => ({ decision: 'ask' as const }))
+  on('process.spawn', async function* (_, e, next) {
+    await new Promise<void>(resolve => next.signal.addEventListener('abort', () => resolve()))
+    return { value: { code: null, signal: 'SIGTERM' } }
+  })
+
+  // The band draws once the plugin has stored the ask as answerable.
+  let stored!: () => void
+  const isStored = new Promise<void>(resolve => (stored = resolve))
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => {
+    if (e.value.some(a => a.isAnswerable)) stored()
+    return next(e)
+  })
+
+  const verdict = $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't2', approver: 'person' })
+  await isStored
+  const band = await $.ui.mount({
+    plugin: 'ai-workflow',
+    component: 'AbovePrompt',
+    surface: 'terminal',
+    props: { hasSurvey: false, isWorking: true, maxRows: 3, bodyColumns: 100, scroll: { offset: 0, bodyRows: 3 }, view: {} },
+  })
+  expect((await band.find({ type: 'Text', text: /^⚠/ }))?.text).toBe('⚠ Leader wants Bash: git push  ')
+  await band.press({ key: 'band-cancel-t2' })
+  await band.unmount()
+
+  const r = await verdict
+  expect(r.decision).toBe('deny')
 })

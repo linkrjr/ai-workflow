@@ -19,6 +19,14 @@ const tick = atom({ plugin: 'ai-workflow', key: 'tick' } as const, 0)
 const asks = atom({ plugin: 'ai-workflow', key: 'asks' } as const, [] as Ask[])
 const LOG_ROWS = 10
 const ASK_COLOR = 'yellow'
+// How long the pane waits for Proceed / Cancel before the engine's own prompt asks.
+const ASK_WAIT_S = 600
+// Tools whose dialog is the person's own (a question, a plan): a hook's allow cannot answer it.
+const PERSON_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode'])
+
+type Choice = 'proceed' | 'cancel'
+// The pane's buttons settle a waiting ask through these, keyed by its tool_use_id.
+const answers = new Map<string, (choice: Choice) => void>()
 
 // The two roles' colors: the legend, the leader box and the agents box.
 const LEADER_COLOR = '#cd7b5b'
@@ -153,6 +161,24 @@ async function endTaskIfDone($: EngineInterface) {
   await update($, leader, l => ({ ...l, taskEndedAt: now }))
 }
 
+// Waits for the ask's Proceed / Cancel, or undefined once ASK_WAIT_S pass or the dispatch aborts.
+// ponytail: a sleeping child process is the wait, since a hook's own time is capped at 10s but
+// stands still while a $ call is in flight; swap it for a real wait if the engine grows one
+async function waitForAnswer($: EngineInterface, id: string): Promise<Choice | undefined> {
+  const pressed = new Promise<Choice>(resolve => answers.set(id, resolve))
+  const sleeping = $.process.spawn({ argv: ['sleep', String(ASK_WAIT_S)] })[Symbol.asyncIterator]()
+  const expired = (async () => {
+    while (!(await sleeping.next()).done);
+    return undefined
+  })()
+  try {
+    return await Promise.race([pressed, expired])
+  } finally {
+    answers.delete(id)
+    void sleeping.return?.(undefined as never) // kills the sleep; the answer need not wait for it
+  }
+}
+
 // Applies fn to the subagent with this id; other loops (the leader's, nested ones) are skipped.
 async function patch($: EngineInterface, id: string | undefined, fn: (a: Subagent) => Subagent) {
   if (!id || !(await read($, subagents)).some(a => a.id === id)) return
@@ -243,23 +269,34 @@ export const register: Register = on => {
     return r
   })
 
-  // An ask the person will answer: shown until its call settles, run or refused.
+  // An ask the person will answer: shown until its call settles, run or refused. Where a person
+  // answers and the pane is on screen, its Proceed / Cancel decide; else the engine's prompt does.
   on('tool.check', async ($, e, next) => {
     const r = await next(e)
-    if (r.decision === 'ask' && e.tool_use_id) {
-      const sub = (await read($, subagents)).find(a => a.id === e.agentId)
-      const ask: Ask = {
-        id: e.tool_use_id,
-        who: sub ? capitalize(sub.name) : e.agentId ? 'A subagent' : 'Leader',
-        tool: e.tool,
-        ...askDetail(e.input),
-        reason: r.reason,
-        rule: r.rule,
-      }
-      await update($, asks, all => [...all.filter(a => a.id !== ask.id), ask])
+    const id = e.tool_use_id
+    if (r.decision !== 'ask' || !id) return r
+    const sub = (await read($, subagents)).find(a => a.id === e.agentId)
+    const placed = e.approver === 'person' && !PERSON_TOOLS.has(e.tool) ? await $.ui.open({ id: PANE }) : undefined
+    const ask: Ask = {
+      id,
+      who: sub ? capitalize(sub.name) : e.agentId ? 'A subagent' : 'Leader',
+      tool: e.tool,
+      ...askDetail(e.input),
+      reason: r.reason,
+      rule: r.rule,
+      isAnswerable: placed?.isPlaced === true,
     }
-    return r
-  }).catch(($, e, next) => next(e)) // a panel bug must never change a verdict
+    await update($, asks, all => [...all.filter(a => a.id !== id), ask])
+    if (!ask.isAnswerable) return r
+
+    const choice = await waitForAnswer($, id)
+    await update($, asks, all => all.filter(a => a.id !== id))
+    if (choice === undefined) return r // no answer in time: the engine's prompt asks
+    await say($, ask.who, `${choice === 'proceed' ? 'allowed' : 'cancelled'} · ${ask.tool} → ${ask.detail}`, choice === 'cancel')
+    return choice === 'proceed'
+      ? { decision: 'allow', reason: 'Allowed in the agent teams pane' }
+      : { decision: 'deny', reason: 'The person cancelled this in the agent teams pane' }
+  }).catch(($, e, next) => next(e)) // a panel bug must never change a verdict: the prompt asks
 
   on('tool.call', async ($, e, next) => {
     // ponytail: an approved call stays listed until it finishes (a long Bash too); clear on
@@ -289,9 +326,26 @@ export const register: Register = on => {
     return r
   })
 
+  // The first answerable ask, above the prompt too: a bare 1 or 2 in an empty prompt answers it.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const a = (await read($, asks)).find(x => x.isAnswerable)
+    if (!a || e.props.hasSurvey) return next(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
+    return (
+      <Box>
+        <Text color={ASK_COLOR} wrap="truncate-end">
+          ⚠ {a.who} wants {a.tool}: {a.detail}{'  '}
+        </Text>
+        <Button key={`band-proceed-${a.id}`} label="Proceed" hotkey="1" plain onPress={() => answers.get(a.id)?.('proceed')} />
+        <Text> </Text>
+        <Button key={`band-cancel-${a.id}`} label="Cancel" hotkey="2" plain onPress={() => answers.get(a.id)?.('cancel')} />
+      </Box>
+    )
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e)
-    const { Box, Text } = els
+    const { Box, Button, Text } = els
     const Image = 'Image' in els ? els.Image : undefined
     // The terminal reads the PNG itself; where it cannot draw one, the glyph shows instead.
     const icon = (key: string, i: Icon, size: { columns: number; rows: number }) =>
@@ -366,11 +420,22 @@ export const register: Register = on => {
                 )}
               </Box>
             ))}
-            <Box marginTop={1}>
-              <Text dimColor italic>
-                {waiting.length === 1 ? 'Claude is' : `${waiting.length} calls are`} waiting on your answer in the permission prompt
-              </Text>
-            </Box>
+            {waiting[0]?.isAnswerable ? (
+              <Box marginTop={1}>
+                <Button key={`proceed-${waiting[0].id}`} label="Proceed" hotkey="1" plain onPress={() => answers.get(waiting[0]!.id)?.('proceed')} />
+                <Text> </Text>
+                <Button key={`cancel-${waiting[0].id}`} label="Cancel" hotkey="2" plain onPress={() => answers.get(waiting[0]!.id)?.('cancel')} />
+                <Text dimColor italic>
+                  {'  '}Claude is waiting on your answer{waiting.length > 1 ? ` (1 of ${waiting.length})` : ''}
+                </Text>
+              </Box>
+            ) : (
+              <Box marginTop={1}>
+                <Text dimColor italic>
+                  {waiting.length === 1 ? 'Claude is' : `${waiting.length} calls are`} waiting on your answer in the permission prompt
+                </Text>
+              </Box>
+            )}
           </Box>
         )}
         <Box width="100%" flexDirection="column" borderStyle="round" borderColor={AGENTS_COLOR} paddingX={1}>
