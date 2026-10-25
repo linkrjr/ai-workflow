@@ -19,6 +19,8 @@ const tick = atom({ plugin: 'ai-workflow', key: 'tick' } as const, 0)
 const asks = atom({ plugin: 'ai-workflow', key: 'asks' } as const, [] as Ask[])
 const LOG_ROWS = 10
 const isLogOpen = atom({ plugin: 'ai-workflow', key: 'isLogOpen' } as const, true)
+// Whether the pane is open, so the band above the prompt can offer to open it.
+const isPaneOpen = atom({ plugin: 'ai-workflow', key: 'isPaneOpen' } as const, false)
 const ASK_COLOR = 'yellow'
 // How long the pane waits for Proceed / Cancel before the engine's own prompt asks.
 const ASK_WAIT_S = 600
@@ -186,9 +188,21 @@ async function patch($: EngineInterface, id: string | undefined, fn: (a: Subagen
   await update($, subagents, all => all.map(a => (a.id === id ? fn(a) : a)))
 }
 
-export const register: Register = on => {
+async function openPane($: EngineInterface) {
+  await update($, isPaneOpen, () => true)
+  return $.ui.open({ id: PANE, title: 'Agent teams' })
+}
+
+export const register: Register = (on, options) => {
+  // Always On off: the pane opens only from the button above the prompt.
+  const isAlwaysOn = options.alwaysOn !== false
+  const isIconsOn = options.iconsOn !== false
+
   on('session.start', async ($, e, next) => {
-    void $.ui.open({ id: PANE, title: 'Agent teams' })
+    // A reload (a changed setting) keeps the engine's panes: read whether ours is up.
+    await update($, isPaneOpen, () => false)
+    if (isAlwaysOn) void openPane($)
+    else if ((await $.ui.panes()).some(p => p.id === PANE)) await update($, isPaneOpen, () => true)
     // ponytail: redraws the whole pane each second while anything runs; a Client module
     // ticking on the surface (as flightdeck's elapsed.tsx does) if that ever costs too much
     $.clock.every(1000, async () => {
@@ -277,7 +291,13 @@ export const register: Register = on => {
     const id = e.tool_use_id
     if (r.decision !== 'ask' || !id) return r
     const sub = (await read($, subagents)).find(a => a.id === e.agentId)
-    const placed = e.approver === 'person' && !PERSON_TOOLS.has(e.tool) ? await $.ui.open({ id: PANE }) : undefined
+    const isPerson = e.approver === 'person' && !PERSON_TOOLS.has(e.tool)
+    // Always On off: an ask doesn't open the pane; it is answered there only if already open.
+    const placed = !isPerson
+      ? undefined
+      : isAlwaysOn
+        ? await $.ui.open({ id: PANE })
+        : (await $.ui.panes()).find(p => p.id === PANE)
     const ask: Ask = {
       id,
       who: sub ? capitalize(sub.name) : e.agentId ? 'A subagent' : 'Leader',
@@ -327,11 +347,26 @@ export const register: Register = on => {
     return r
   })
 
+  on('ui.close', async ($, e, next) => {
+    const r = await next(e)
+    if (e.id === PANE) await update($, isPaneOpen, () => false)
+    return r
+  })
+
   // The first answerable ask, above the prompt too: a bare 1 or 2 in an empty prompt answers it.
+  // With Always On off and the pane closed, the band offers to open it instead.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey) return next(e)
     const a = (await read($, asks)).find(x => x.isAnswerable)
-    if (!a || e.props.hasSurvey) return next(e)
     const { Box, Button, Text } = $.ui.resolve(e)
+    if (!a) {
+      if (isAlwaysOn || (await read($, isPaneOpen))) return next(e)
+      return (
+        <Box>
+          <Button key="open-pane" label="▸ agent teams" plain dimColor onPress={() => void openPane($)} />
+        </Box>
+      )
+    }
     return (
       <Box>
         <Text color={ASK_COLOR} wrap="truncate-end">
@@ -347,7 +382,7 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e)
     const { Box, Button, Text } = els
-    const Image = 'Image' in els ? els.Image : undefined
+    const Image = isIconsOn && 'Image' in els ? els.Image : undefined
     // The terminal reads the PNG itself; where it cannot draw one, the glyph shows instead.
     const icon = (key: string, i: Icon, size: { columns: number; rows: number }) =>
       Image && (

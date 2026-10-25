@@ -25,5 +25,19 @@
     "architecture",
     "code-review"
   ],
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "alwaysOn": {
+      "type": "boolean",
+      "title": "Always On",
+      "description": "Show the agent teams pane whenever a session starts. Off: a button above the prompt opens it.",
+      "default": true
+    },
+    "iconsOn": {
+      "type": "boolean",
+      "title": "Icons On",
+      "description": "Show each agent's icon in the agent teams pane.",
+      "default": true
+    }
+  }
 }

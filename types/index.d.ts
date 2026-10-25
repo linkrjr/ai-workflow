@@ -45,6 +45,6 @@ export type LogLine = { at: number; who: string; text: string; isError: boolean 
 
 declare module 'claude-code' {
   interface PluginState {
-    'ai-workflow': { subagents: Subagent[]; log: LogLine[]; leader: Leader; tick: number; asks: Ask[]; isLogOpen: boolean }
+    'ai-workflow': { subagents: Subagent[]; log: LogLine[]; leader: Leader; tick: number; asks: Ask[]; isLogOpen: boolean; isPaneOpen: boolean }
   }
 }

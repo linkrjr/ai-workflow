@@ -285,3 +285,66 @@ test('the session log box collapses and expands', async ($, on) => {
   expect(await text(/^Session not started$/)).toBe('Session not started')
   await ui.unmount()
 })
+
+const BAND = {
+  plugin: 'ai-workflow',
+  component: 'AbovePrompt',
+  surface: 'terminal',
+  props: { hasSurvey: false, isWorking: false, maxRows: 3, bodyColumns: 100, scroll: { offset: 0, bodyRows: 3 }, view: {} },
+} as const
+
+test('Always On off: the pane waits for the button above the prompt', { options: { alwaysOn: false } }, async ($, on) => {
+  const opened: string[] = []
+  on('ui.open', (_, e) => {
+    opened.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('ui.panes', () => ({ value: [] }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  // The engine's own band beneath: nothing to show.
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box key="engine-band" />
+  })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(opened).toEqual([])
+
+  const band = await $.ui.mount(BAND)
+  await band.press({ key: 'open-pane' })
+  expect(opened).toEqual(['agent-teams'])
+  expect(await band.find({ key: 'open-pane' })).toBeUndefined()
+  await band.unmount()
+})
+
+test('Always On: the pane opens with the session and the band stays empty', async ($, on) => {
+  const opened: string[] = []
+  on('ui.open', (_, e) => {
+    opened.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  // The engine's own band beneath: nothing to show.
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box key="engine-band" />
+  })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(opened).toEqual(['agent-teams'])
+  const band = await $.ui.mount(BAND)
+  expect(await band.find({ key: 'open-pane' })).toBeUndefined()
+  await band.unmount()
+})
+
+test('Icons On off: the pane draws no icons', { options: { iconsOn: false } }, async ($, on) => {
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Image' })).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /AGENT TEAMS/ }))?.text).toBe('AGENT TEAMS - OPUS 5.5 IDLE')
+  await ui.unmount()
+})
