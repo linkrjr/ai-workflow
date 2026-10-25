@@ -269,3 +269,19 @@ test('Cancel above the prompt refuses an ask a person would answer', async ($, o
   const r = await verdict
   expect(r.decision).toBe('deny')
 })
+
+test('the session log box collapses and expands', async ($, on) => {
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
+  expect(await text(/^Session not started$/)).toBe('Session not started')
+
+  await ui.press({ key: 'log-toggle' })
+  expect(await text(/^Session not started$/)).toBeUndefined()
+
+  await ui.press({ key: 'log-toggle' })
+  expect(await text(/^Session not started$/)).toBe('Session not started')
+  await ui.unmount()
+})

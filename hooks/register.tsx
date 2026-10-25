@@ -18,6 +18,7 @@ const leader = atom({ plugin: 'ai-workflow', key: 'leader' } as const, {
 const tick = atom({ plugin: 'ai-workflow', key: 'tick' } as const, 0)
 const asks = atom({ plugin: 'ai-workflow', key: 'asks' } as const, [] as Ask[])
 const LOG_ROWS = 10
+const isLogOpen = atom({ plugin: 'ai-workflow', key: 'isLogOpen' } as const, true)
 const ASK_COLOR = 'yellow'
 // How long the pane waits for Proceed / Cancel before the engine's own prompt asks.
 const ASK_WAIT_S = 600
@@ -369,6 +370,7 @@ export const register: Register = on => {
     const subs = all.filter(s => s.status === 'running')
     const lines = (await read($, log)).slice(-LOG_ROWS)
     const waiting = await read($, asks)
+    const isOpen = await read($, isLogOpen)
 
     return (
       <Box width="100%" flexDirection="column">
@@ -469,9 +471,14 @@ export const register: Register = on => {
           })}
         </Box>
         <Box width="100%" flexDirection="column" borderStyle="round" paddingX={1}>
-          <Text dimColor>session log</Text>
-          {lines.length === 0 && <Text dimColor>Session not started</Text>}
-          {lines.map(l => (
+          <Box>
+            <Button key="log-toggle" plain dimColor onPress={() => update($, isLogOpen, open => !open)}>
+              {isOpen ? '▾' : '▸'} session log
+            </Button>
+            {!isOpen && lines.length > 0 && <Text dimColor> ({lines.length} lines)</Text>}
+          </Box>
+          {isOpen && lines.length === 0 && <Text dimColor>Session not started</Text>}
+          {isOpen && lines.map(l => (
             <Box>
               <Box width={9} flexShrink={0}>
                 <Text dimColor>{formatClock(l.at)}</Text>
