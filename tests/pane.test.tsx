@@ -348,3 +348,19 @@ test('Icons On off: the pane draws no icons', { options: { iconsOn: false } }, a
   expect((await ui.find({ type: 'Text', text: /AGENT TEAMS/ }))?.text).toBe('AGENT TEAMS - OPUS 5.5 IDLE')
   await ui.unmount()
 })
+
+test('in auto mode an ask is left to the classifier: no permission box', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.check', () => ({ decision: 'ask' as const }))
+  on('classic.UserPromptSubmit', () => ({}))
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => (writes.push(e.value), next(e)))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'auto' })
+  const r = await $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't3', approver: 'person' })
+
+  expect(r.decision).toBe('ask')
+  expect(writes).toEqual([])
+})

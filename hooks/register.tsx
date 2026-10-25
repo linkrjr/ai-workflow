@@ -198,6 +198,13 @@ export const register: Register = (on, options) => {
   const isAlwaysOn = options.alwaysOn !== false
   const isIconsOn = options.iconsOn !== false
 
+  // The session's permission mode, as the last prompt saw it. In auto mode the classifier
+  // answers asks, so the pane stays out of them; the normal dialog asks if it can't.
+  // ponytail: a mode switched mid-turn is seen at the next prompt
+  let mode: string | undefined
+  on('classic.SessionStart', ($, e, next) => ((mode = e.permission_mode), next(e)))
+  on('classic.UserPromptSubmit', ($, e, next) => ((mode = e.permission_mode), next(e)))
+
   on('session.start', async ($, e, next) => {
     // A reload (a changed setting) keeps the engine's panes: read whether ours is up.
     await update($, isPaneOpen, () => false)
@@ -289,7 +296,7 @@ export const register: Register = (on, options) => {
   on('tool.check', async ($, e, next) => {
     const r = await next(e)
     const id = e.tool_use_id
-    if (r.decision !== 'ask' || !id) return r
+    if (r.decision !== 'ask' || !id || mode === 'auto') return r
     const sub = (await read($, subagents)).find(a => a.id === e.agentId)
     const isPerson = e.approver === 'person' && !PERSON_TOOLS.has(e.tool)
     // Always On off: an ask doesn't open the pane; it is answered there only if already open.
