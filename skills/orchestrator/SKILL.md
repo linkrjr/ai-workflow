@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), files one Linear ticket per task after confirming with the user, runs designer when the spec has a UI/UX or frontend surface, delegates to backend-engineer and frontend-engineer, always runs code-reviewer and qa-tester in parallel, loops until both are clean, then has writer document the result. Use after /workshop with the spec path, e.g. /orchestrator docs/specs/<slug>.md.
+description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), files one Linear ticket per task after confirming with the user, runs designer when the spec has a UI/UX or frontend surface (rendering a storyboard image, optionally uploaded to Figma), delegates to backend-engineer and frontend-engineer, always runs code-reviewer and qa-tester in parallel, loops until both are clean, then has writer document the result. Use after /workshop with the spec path, e.g. /orchestrator docs/specs/<slug>.md.
 model: Opus
 effort: medium
 ---
@@ -65,9 +65,19 @@ Idle agents still burn tokens while they wait. The moment an agent delivers its 
 
 ## 3. Design (only when the spec has a UI/UX or frontend surface)
 1. Check the spec: does it mention UI/UX, screens, visual design, layout, or any frontend work? If so, and the client is NOT a CLI (a terminal/CLI client has no visual design surface), spawn `designer` alone, before any engineer starts.
-2. Brief: "Read tmp/team/handoff.md. Produce the UI/UX design and design rationale for this spec."
-3. Wait for `designer` to report, then save its output to `tmp/team/design.md`, add a line to the handoff: `Design doc: tmp/team/design.md` — so backend-engineer and frontend-engineer both read it as part of tmp/team/handoff.md — and stop the agent.
-4. Skip this step entirely for CLI-only clients or specs with no UI/UX or frontend surface. Never run `designer` in parallel with an engineer, and never start `frontend-engineer` before this step is done (when it applies).
+2. Brief: "Read tmp/team/handoff.md. Produce the UI/UX design and design rationale for this spec, including the storyboard image at tmp/team/design/storyboard.png (source tmp/team/design/storyboard.html) covering every screen, state and error case, with arrows for each interaction."
+3. Wait for `designer` to report, then save its output to `tmp/team/design.md`, add a line to the handoff: `Design doc: tmp/team/design.md` — so backend-engineer and frontend-engineer both read it as part of tmp/team/handoff.md — and stop the agent. If the report has no storyboard PNG, spawn a fresh `designer` with the handoff path to produce it; don't move on without it.
+4. Show the user `tmp/team/design/storyboard.png` and ask whether to upload the design to Figma: "Upload to Figma" / "Skip". On "Skip", go to step 5. On "Upload to Figma", see "3a. Upload to Figma" below, then come back to step 5.
+5. Skip this step entirely for CLI-only clients or specs with no UI/UX or frontend surface. Never run `designer` in parallel with an engineer, and never start `frontend-engineer` before this step is done (when it applies).
+
+### 3a. Upload to Figma (only when the user said yes in step 3.4)
+You do this yourself: subagents can't reach the user's MCP login.
+1. Find the Figma MCP tools with ToolSearch (`figma`). No Figma tools at all → tell the user the Figma MCP isn't installed (`claude mcp add --transport http figma https://mcp.figma.com/mcp`, or the `figma` plugin), ask "Retry" / "Skip Figma", and on "Skip Figma" carry on without it.
+2. Check the login. If the only Figma tools are `authenticate` / `complete_authentication`, or a read-only call such as `whoami` fails with an auth error, the user is not logged in. Otherwise they are; go to step 4.
+3. Not logged in: tell the user so, and give them the way in — call `authenticate` and show the URL it returns, or point them to `/mcp` → figma → Authenticate. Then ask "I've logged in" / "Skip Figma" and wait as long as it takes. On "I've logged in", go back to step 1 and verify again (the full tool set only appears after login); never assume it worked. On "Skip Figma", carry on without it.
+4. Logged in: load the `figma:figma-code-workflows` skill and follow it to import `tmp/team/design/storyboard.html` into a new Figma Design file as editable frames, named after the spec. If the import can't take the HTML, create a new file (load `figma:figma-create-new-file` first) and place `storyboard.png` in it.
+5. Open the new file in the user's browser — `open <figma url>` on macOS, `xdg-open <figma url>` on Linux — and add `Figma: <url>` to the handoff under the design doc line.
+6. If the upload fails, tell the user the error and ask "Retry" / "Skip Figma". A failed upload never blocks the rest of the pipeline.
 
 ## 4. Implement
 1. One-layer task: spawn ONE engineer. Do not split a task to use both roles.
@@ -99,6 +109,7 @@ Then tell the user:
 - Every QA test run and its outcome
 - Number of review/QA rounds, and the final verdicts
 - Linear tickets filed and now marked done (identifier and URL for each)
+- The design storyboard path, and the Figma URL if it was uploaded
 - Steps the user can follow to try the feature
 
 Do not commit. If the user asks for a PR, invoke the `pr` skill. If the work must pause, invoke the `handoff` skill before you stop.
