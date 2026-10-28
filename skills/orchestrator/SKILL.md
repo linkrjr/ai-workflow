@@ -15,7 +15,8 @@ Subagents never ask the user. A subagent that needs a decision stops and reports
 ## Agent hygiene: never leave one idle
 Idle agents still burn tokens while they wait.
 - Engineers are workers: each one owns a worktree and takes task after task. When an engineer submits a PR, give it its next piece of work right away with SendMessage (see section 5). If there is no unblocked task for it, stop it with `TaskStop(task_id=<its name>)` — don't keep it alive in case a task unblocks later; spawn a fresh engineer then.
-- Every other agent (ticket-reviewer, designer, code-reviewer, qa-tester, writer) is stopped the moment its report is captured.
+- `code-reviewer` and `qa-tester` are workers too, but only one of each runs at a time: each works through its queue one PR after another (see section 5) and is stopped once its queue is empty.
+- Every other agent (ticket-reviewer, designer, writer) is stopped the moment its report is captured.
 - A fresh agent loses nothing: `tmp/team/handoff.md` and the task doc carry all the context it needs.
 
 ## 1. Prepare
@@ -131,7 +132,7 @@ You do this yourself: subagents can't reach the user's MCP login.
 1. A task is unblocked when its status is `todo` and every task in its `depends on:` is `merged`. If a dependency is `approved` but its engineer is stopped or busy, merge that PR yourself (`gh pr merge <PR> --squash`, then `git pull --ff-only` in the main worktree) and set it to `merged`.
 2. Start one engineer per unblocked task, all in a single message so they run in parallel — `backend-engineer` for backend tasks, `frontend-engineer` for frontend tasks (Agent tool, `subagent_type` = the agent name). Give each a unique `name` (`be-1`, `be-2`, `fe-1`, ...). Never start more engineers than there are unblocked tasks.
 3. Brief: "Your name: <name>. Main worktree: <path>. Your worktree: <main worktree parent>/<repo name>.worktrees/<name>. Base branch: <base>. Read <main worktree>/tmp/team/handoff.md first. Your task: <task ID>." Set the task's `engineer:` to that name and its status to `in-progress` (and the intent file's status, when using intent files; for Linear the ticket is already "in progress").
-4. When an engineer submits a PR, check its task line now has `PR: #<n>`, set the status to `in-review` (intent file too), and start section 5 for that PR right away. Then give that engineer its next work with SendMessage, in this order:
+4. When an engineer submits a PR, check its task line now has `PR: #<n>`, set the status to `in-review` (intent file too), and queue it for review and QA (section 5). Then give that engineer its next work with SendMessage, in this order:
    - a PR of its own with `changes-requested` → "Fix PR #<n>: <findings file paths>."
    - otherwise an unblocked task → "Next task: <task ID>." (it merges its approved PRs and updates its worktree first, by its own rules)
    - otherwise nothing → stop it with `TaskStop`.
@@ -139,14 +140,14 @@ You do this yourself: subagents can't reach the user's MCP login.
 6. A PR with `changes-requested` whose engineer was stopped: spawn a fresh engineer of that role with the same name and worktree, briefed: "... Fix PR #<n> for task <task ID>: <findings file paths>."
 
 ## 5. Review and QA (mandatory, every PR, no exceptions)
-For each PR, round N starting at 1:
-1. In a single message, spawn both `code-reviewer` and `qa-tester` in parallel (they are independent: one reads the diff, the other runs the app):
+There is exactly one `code-reviewer` and one `qa-tester` at a time, each with its own queue. PRs wait in line when engineers submit faster than they can be checked.
+1. Queues: keep `Review queue:` and `QA queue:` lines in the handoff, oldest first, each entry `#<n> (task <task ID>, round <N>)`. Round N starts at 1 and goes up by one each time the engineer pushes a fix. When a PR is submitted or a fix is pushed, add it to the end of both queues.
+2. Hand out work. Whenever a queue has entries and its agent is free, give it the first entry and take that entry off the queue. If its agent isn't running, spawn it (Agent tool, `name` = `code-reviewer` / `qa-tester`); if it is running and free, send the entry with SendMessage. The two agents are independent (one reads the diff, the other runs the app), so they work on different PRs at the same time:
    - `code-reviewer`: "Read <main worktree>/tmp/team/handoff.md. Review PR #<n> for task <task ID>. This is round <N>. Write your result to <main worktree>/tmp/team/review-pr-<n>-round-<N>.md."
    - `qa-tester`: "Read <main worktree>/tmp/team/handoff.md. QA test PR #<n> for task <task ID> end to end. This is round <N>. Write your result to <main worktree>/tmp/team/qa-pr-<n>-round-<N>.md."
-2. Wait for both, then stop both agents — their reports are saved to disk.
-3. Either says FINDINGS → set the task to `changes-requested` and route the fix to the PR's engineer (section 4, steps 4 and 6). When the fix is pushed, set it back to `in-review` and go to step 1 with N + 1. There is no round limit.
-4. Both say `VERDICT: CLEAN` on the same round → set the task to `approved`. The engineer merges it before its next task; if no engineer will (no tasks left for it), merge it yourself as in section 4, step 1. Set it to `merged` (intent file status `done`).
-5. Different PRs run their review/QA rounds independently and in parallel.
+3. Each report covers one PR and comes back to you as soon as that PR is done. Act on it (steps 4-5), then hand that agent its next queue entry right away. If its queue is empty, stop it with `TaskStop`; spawn it again when a new entry arrives.
+4. A report says FINDINGS → set the task to `changes-requested` and route the fix to the PR's engineer (section 4, steps 4 and 6). If that PR's round is still waiting in the other queue, take it off: the fix starts a new round anyway. When the fix is pushed, set the task back to `in-review` and queue round N + 1 in both queues. There is no round limit.
+5. Both reports for the same round say `VERDICT: CLEAN` → set the task to `approved`. The engineer merges it before its next task; if no engineer will (no tasks left for it), merge it yourself as in section 4, step 1. Set it to `merged` (intent file status `done`).
 
 ## 6. Document
 Only after every task in the handoff is `merged` (every engineer, code-reviewer, and qa-tester agent should already be stopped per the agent hygiene rule above — if any is still running, stop it first): run `git pull --ff-only` in the main worktree, then spawn `writer` alone, with: "Read tmp/team/handoff.md. Implementation is complete, reviewed clean, QA passed and merged. Update README/API docs/comments for the files changed since <base commit>."

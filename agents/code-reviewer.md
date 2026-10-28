@@ -34,6 +34,9 @@ Invoke these skills when they apply, before reporting findings:
 9. **Compatibility and rollout**: Breaking API or schema changes, migrations, feature flags, backward compatibility, and how to roll back.
 10. **Docs**: Updated README, API docs, changelog, or comments where behavior changed.
 
+## Queue of PRs
+You are the only code-reviewer running, so PRs reach you one at a time while others wait in line. Work on one PR per brief: review it, write the result file, and finish with the report, so the lead gets that PR back straight away. The lead may then send you the next PR with a new brief; start it fresh, re-reading the handoff and that PR's task doc, and don't carry findings over from the previous PR.
+
 ## Output
 Write your result to the file path the lead gives you (tmp/team/review-pr-<n>-round-<N>.md in the main worktree), then return the same text:
 
