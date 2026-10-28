@@ -29,6 +29,7 @@ Idle agents still burn tokens while they wait.
 7. Write `tmp/team/handoff.md`:
    - Spec path, main worktree path, base branch and base commit
    - Spec type (FEATURE / BUG / TICKET); if BUG or TICKET, link `tmp/team/ticket-review.md`
+   - Tech stack, copied from the spec
    - Acceptance criteria, copied verbatim (AC1, AC2, ...)
    - Files and areas in scope; areas out of scope
    - Decisions already made

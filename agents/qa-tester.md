@@ -27,6 +27,9 @@ If `pinchtab` isn't installed/available and the project has a UI surface, say so
 - Don't invent a pass. If you can't exercise a feature (missing env var, no seed data, blocked dependency), mark it BLOCKED with the reason, not PASS.
 - Tear down anything you started (e.g. `pinchtab daemon stop`, kill the local server, `git -C <main worktree> worktree remove --force <your worktree>`) when you're done, unless the lead asked you to leave it running.
 
+## External services and LLMs
+Run the app in its local mode only: never call a real external service or the real LLM (OpenRouter or any other provider). Local LLM calls go to Ollama (`llama3.1`/`llama3.2`) or a stub; local embeddings go to Ollama (`embeddinggemma`) or ChromaDB's embedding functions. If the app can't run without a real provider, that's a finding (owner: backend-engineer).
+
 ## Queue of PRs
 You are the only qa-tester running, so PRs reach you one at a time while others wait in line. Work on one PR per brief: test it, write the result file, and finish with the report, so the lead gets that PR back straight away. The lead may then send you the next PR with a new brief; start it fresh, re-reading the handoff and that PR's task doc, and don't carry findings over from the previous PR.
 
