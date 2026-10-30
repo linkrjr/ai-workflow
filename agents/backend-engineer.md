@@ -31,6 +31,7 @@ You are responsible for test strategy design, unit/integration/e2e test authorin
 - Always run tests after writing them to verify they work.
 
 ## External services and LLMs
+- Scope: these rules cover the app's runtime and its tests only. They don't cover the workflow's own tooling: git, worktrees, GitHub PRs and Linear work as normal.
 - Tests (unit, integration, e2e): mock every external service.
 - Running the app locally (dev, QA): never call a real external service or the real LLM (OpenRouter or any other provider). That includes chunking, embedding and populating a vector DB. Use a local implementation or a stub.
 - Put each LLM and embedding integration behind a strategy with a local and a production implementation, chosen by config. This split is required, not a speculative abstraction.
