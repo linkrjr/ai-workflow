@@ -19,6 +19,20 @@ Idle agents still burn tokens while they wait.
 - Every other agent (ticket-reviewer, designer, writer) is stopped the moment its report is captured.
 - A fresh agent loses nothing: `tmp/team/handoff.md` and the task doc carry all the context it needs.
 
+## Progress bar and pill (only when `CMUX_WORKSPACE_ID` is set)
+The workspace card has one progress bar, and every subagent shares your workspace, so you alone own it and it shows the whole run, never one agent. Never tell a subagent to set it or the pill. Update it with `cmux set-progress <p> --label "<label>"` (see the `cmux` skill) at the end of each section below and every time you change a task's status in the handoff. Ignore any error from it or the pill — they never block the run.
+
+Next to the bar, keep one pill naming the phase the run is in: `cmux set-status orchestrator "<phase>" --icon <icon> --color <color>`, set when a section starts. The key is always `orchestrator`, so each call replaces the last.
+- `Reproducing` / `Preparing` / `Filing tasks` / `Designing` — icon `doc.text`, color `#4C8DFF`
+- `Implementing` (section 4 starts) — icon `hammer`, color `#ff9500`
+- `Waiting on you` (whenever you ask the user a question) — icon `questionmark.circle`, color `#ff3b30`; set the previous phase back once they answer
+- `Documenting` — icon `pencil`, color `#4C8DFF`
+- `Done` (section 7) — icon `checkmark.circle`, color `#34c759`
+- `Stopped` (the run stops early, e.g. ticket-reviewer can't reproduce) — icon `xmark.circle`, color `#8e8e93`
+- Sections 1-3 (prepare, file, design): `0.05` after Prepare, `0.1` after Filing and Design.
+- Sections 4-5: `p = 0.1 + 0.8 × (sum of task weights) / (number of tasks)`, weights `todo` 0, `in-progress` 0.25, `in-review` and `changes-requested` 0.5, `approved` 0.75, `merged` 1. Label: `<merged>/<total> merged · <n> in review`.
+- Section 6: `0.9`, label `Documenting`. Section 7: `1.0`, label `Done`.
+
 ## 1. Prepare
 1. Read the spec. If it has no "Acceptance criteria" section, stop and tell the user to run /workshop first.
 2. Check the spec's `Type:`. If it is `BUG` or `TICKET`, resolve reproduction before anything else in this section — see "1a. Verify reproduction" below. Do not start designer, backend-engineer, or frontend-engineer until that gate says `REPRODUCED`. A `FEATURE` or `TECH_DEBT` spec skips straight to step 3.
