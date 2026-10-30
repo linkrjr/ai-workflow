@@ -286,6 +286,16 @@ test('the session log box collapses and expands', async ($, on) => {
   await ui.unmount()
 })
 
+test('Session Log On off: the pane draws no session log', { options: { logOn: false } }, async ($, on) => {
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ key: 'log-toggle' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^Session not started$/ })).toBeUndefined()
+  await ui.unmount()
+})
+
 const BAND = {
   plugin: 'ai-workflow',
   component: 'AbovePrompt',

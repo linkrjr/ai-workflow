@@ -76,6 +76,12 @@
       "title": "Pomodoro · Pomodoros per cycle",
       "description": "Pomodoros before a long break (2-8). Applies from the next phase that starts.",
       "default": 4
+    },
+    "logOn": {
+      "type": "boolean",
+      "title": "Agent teams pane · Session Log On",
+      "description": "Show the session log box in the agent teams pane.",
+      "default": true
     }
   }
 }
