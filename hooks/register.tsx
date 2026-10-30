@@ -197,6 +197,7 @@ export const register: Register = (on, options) => {
   // Always On off: the pane opens only from the button above the prompt.
   const isAlwaysOn = options.alwaysOn !== false
   const isIconsOn = options.iconsOn !== false
+  const isLogOn = options.logOn !== false
 
   // The session's permission mode, as the last prompt saw it. In auto mode the classifier
   // answers asks, so the pane stays out of them; the normal dialog asks if it can't.
@@ -515,28 +516,30 @@ export const register: Register = (on, options) => {
             )
           })}
         </Box>
-        <Box width="100%" flexDirection="column" borderStyle="round" paddingX={1}>
-          <Box>
-            <Button key="log-toggle" plain dimColor onPress={() => update($, isLogOpen, open => !open)}>
-              {isOpen ? '▾' : '▸'} session log
-            </Button>
-            {!isOpen && lines.length > 0 && <Text dimColor> ({lines.length} lines)</Text>}
-          </Box>
-          {isOpen && lines.length === 0 && <Text dimColor>Session not started</Text>}
-          {isOpen && lines.map(l => (
+        {isLogOn && (
+          <Box width="100%" flexDirection="column" borderStyle="round" paddingX={1}>
             <Box>
-              <Box width={9} flexShrink={0}>
-                <Text dimColor>{formatClock(l.at)}</Text>
-              </Box>
-              <Box width={13} flexShrink={0}>
-                <Text bold wrap="truncate">{l.who}</Text>
-              </Box>
-              <Text color={l.isError ? 'red' : undefined} wrap="truncate">
-                {l.text}
-              </Text>
+              <Button key="log-toggle" plain dimColor onPress={() => update($, isLogOpen, open => !open)}>
+                {isOpen ? '▾' : '▸'} session log
+              </Button>
+              {!isOpen && lines.length > 0 && <Text dimColor> ({lines.length} lines)</Text>}
             </Box>
-          ))}
-        </Box>
+            {isOpen && lines.length === 0 && <Text dimColor>Session not started</Text>}
+            {isOpen && lines.map(l => (
+              <Box>
+                <Box width={9} flexShrink={0}>
+                  <Text dimColor>{formatClock(l.at)}</Text>
+                </Box>
+                <Box width={13} flexShrink={0}>
+                  <Text bold wrap="truncate">{l.who}</Text>
+                </Box>
+                <Text color={l.isError ? 'red' : undefined} wrap="truncate">
+                  {l.text}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        )}
       </Box>
     )
   })
