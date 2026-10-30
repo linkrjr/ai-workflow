@@ -29,6 +29,8 @@ Next to the bar, keep one pill naming the phase the run is in: `cmux set-status 
 - `Documenting` — icon `pencil`, color `#4C8DFF`
 - `Done` (section 7) — icon `checkmark.circle`, color `#34c759`
 - `Stopped` (the run stops early, e.g. ticket-reviewer can't reproduce) — icon `xmark.circle`, color `#8e8e93`
+
+When the whole run is done (section 7, right after you set `Done`), send one notification: `cmux notify --title "Orchestrator done" --subtitle "<spec slug>" --body "<n> tasks merged across <n> PRs, review and QA clean"`. Send no other notifications.
 - Sections 1-3 (prepare, file, design): `0.05` after Prepare, `0.1` after Filing and Design.
 - Sections 4-5: `p = 0.1 + 0.8 × (sum of task weights) / (number of tasks)`, weights `todo` 0, `in-progress` 0.25, `in-review` and `changes-requested` 0.5, `approved` 0.75, `merged` 1. Label: `<merged>/<total> merged · <n> in review`.
 - Section 6: `0.9`, label `Documenting`. Section 7: `1.0`, label `Done`.

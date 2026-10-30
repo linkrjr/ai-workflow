@@ -98,6 +98,10 @@ cmux markdown open docs/report.md      # live-reloading markdown viewer
 cmux diff --branch --base main         # diff viewer split
 ```
 
+`notify --workspace <ref>` alone still lands on your own surface, because
+`$CMUX_SURFACE_ID` wins. To notify another workspace, also pass that
+workspace's `--surface` (from `cmux list-pane-surfaces --workspace <ref>`).
+
 Subagents run in the lead's workspace and share its single progress bar, so
 a subagent never calls `set-progress` or `clear-progress` — the lead owns it
 and reports progress for the whole run.
