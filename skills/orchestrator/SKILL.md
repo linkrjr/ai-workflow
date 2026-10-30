@@ -23,7 +23,7 @@ Idle agents still burn tokens while they wait.
 1. Read the spec. If it has no "Acceptance criteria" section, stop and tell the user to run /workshop first.
 2. Check the spec's `Type:`. If it is `BUG` or `TICKET`, resolve reproduction before anything else in this section — see "1a. Verify reproduction" below. Do not start designer, backend-engineer, or frontend-engineer until that gate says `REPRODUCED`. A `FEATURE` or `TECH_DEBT` spec skips straight to step 3.
 3. Read enough of the codebase to know which layers change. Check; do not assume.
-4. Check that PRs can be opened: `gh auth status` succeeds and `git remote get-url origin` points at GitHub. If not, tell the user what's missing and ask "Retry" / "Stop"; engineers can't submit work without it.
+4. Check that PRs can be opened: `gh auth status` succeeds and `git remote get-url origin` points at GitHub. If not, tell the user what's missing and ask "Retry" / "Stop"; engineers can't submit work without it. When the only thing missing is the remote, also offer "Create a private GitHub repo", and on that answer run `gh repo create <repo name> --private --source . --push`, then check again. The engineers' local-only rules are about the app's runtime, not git, so a GitHub remote doesn't break them.
 5. Note the main worktree (`git rev-parse --show-toplevel`), the base branch (`git branch --show-current`) and the base commit (`git rev-parse HEAD`).
 6. Split the spec into tasks — see "1b. Split into tasks" below.
 7. Write `tmp/team/handoff.md`:
