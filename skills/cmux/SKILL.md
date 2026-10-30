@@ -91,12 +91,16 @@ Target is a workspace/surface ref or a workspace title (exact, then unique prefi
 ```sh
 cmux set-status build "running" --icon hammer --color "#ff9500"   # sidebar pill; unique key per tool
 cmux clear-status build
-cmux set-progress 0.4 --label "3/8 tasks"; cmux clear-progress
+cmux set-progress 0.4 --label "3/8 tasks"; cmux clear-progress    # one bar per workspace
 cmux log --level info --source agent "migrations applied"
 cmux notify --title "Build done" --body "All tests passed"         # --desktop false: no banner
 cmux markdown open docs/report.md      # live-reloading markdown viewer
 cmux diff --branch --base main         # diff viewer split
 ```
+
+Subagents run in the lead's workspace and share its single progress bar, so
+a subagent never calls `set-progress` or `clear-progress` — the lead owns it
+and reports progress for the whole run.
 
 ## Browser pane
 
