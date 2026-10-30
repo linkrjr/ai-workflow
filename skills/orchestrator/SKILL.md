@@ -21,14 +21,14 @@ Idle agents still burn tokens while they wait.
 
 ## 1. Prepare
 1. Read the spec. If it has no "Acceptance criteria" section, stop and tell the user to run /workshop first.
-2. Check the spec's `Type:`. If it is `BUG` or `TICKET`, resolve reproduction before anything else in this section — see "1a. Verify reproduction" below. Do not start designer, backend-engineer, or frontend-engineer until that gate says `REPRODUCED`. A `FEATURE` spec skips straight to step 3.
+2. Check the spec's `Type:`. If it is `BUG` or `TICKET`, resolve reproduction before anything else in this section — see "1a. Verify reproduction" below. Do not start designer, backend-engineer, or frontend-engineer until that gate says `REPRODUCED`. A `FEATURE` or `TECH_DEBT` spec skips straight to step 3.
 3. Read enough of the codebase to know which layers change. Check; do not assume.
 4. Check that PRs can be opened: `gh auth status` succeeds and `git remote get-url origin` points at GitHub. If not, tell the user what's missing and ask "Retry" / "Stop"; engineers can't submit work without it.
 5. Note the main worktree (`git rev-parse --show-toplevel`), the base branch (`git branch --show-current`) and the base commit (`git rev-parse HEAD`).
 6. Split the spec into tasks — see "1b. Split into tasks" below.
 7. Write `tmp/team/handoff.md`:
    - Spec path, main worktree path, base branch and base commit
-   - Spec type (FEATURE / BUG / TICKET); if BUG or TICKET, link `tmp/team/ticket-review.md`
+   - Spec type (FEATURE / BUG / TICKET / TECH_DEBT); if BUG or TICKET, link `tmp/team/ticket-review.md`
    - Tech stack, copied from the spec
    - Acceptance criteria, copied verbatim (AC1, AC2, ...)
    - Files and areas in scope; areas out of scope
@@ -54,6 +54,7 @@ Make every task as small as it can be while still being worked, reviewed and mer
 - Each task leaves the base branch working when merged on its own.
 - Each AC is covered by at least one task; a task may cover part of an AC.
 - Write down real dependencies only: a task depends on another when it needs that task's code merged first (e.g. a frontend task that calls a new endpoint depends on the endpoint task). Tasks without a dependency between them can run in parallel, so don't chain tasks that don't need it.
+- Specs scoped from an audit (they have a "Findings in scope" table): one task per finding, carrying its ID, `file:line` and recommendation into the task doc. Findings that touch the same file go in one task, so their PRs don't conflict.
 
 ## 2. File the tasks
 Ask the user where to file the tasks: "Intent files" / "Linear". Record the answer as the handoff's `Task tracker`. Each task's doc is then either its intent file or its Linear issue, never both, and every agent reads only the doc of the task it is working on.
@@ -95,7 +96,7 @@ Skip any task whose handoff line already has an `intent:` or `linear:` reference
 2. Find the Linear project name: check the handoff/spec for one already named. If neither names one, run `scripts/linear.sh projects` and have the user pick from the returned names instead of asking them to type one freely — use AskUserQuestion when there are 4 or fewer projects; otherwise print the full list and ask the user to reply with their choice.
 3. Build one ticket per line in the handoff's `Task list`:
    - Title: the task name.
-   - Labels: the task's `owner` value, plus the spec's `Type:` value (`FEATURE` / `BUG` / `TICKET`).
+   - Labels: the task's `owner` value, plus the spec's `Type:` value (`FEATURE` / `BUG` / `TICKET` / `TECH_DEBT`).
    - Description, built from these sections:
      ```
      ## Description
