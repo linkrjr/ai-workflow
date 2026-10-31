@@ -8,7 +8,7 @@
     {
       "name": "ai-workflow",
       "source": "./",
-      "description": "AI engineering pipeline: /workshop (spec), /orchestrator (design→code→review→docs), /audit (audit). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, writer agents."
+      "description": "AI engineering pipeline: /workshop (spec), /orchestrator (design→code→review→docs), /audit (audit). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, writer agents, plus optional Jev advisory signals."
     }
   ]
 }
