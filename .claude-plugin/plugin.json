@@ -1,7 +1,7 @@
 {
   "name": "ai-workflow",
-  "version": "1.0.4",
-  "description": "AI engineering pipeline with /workshop (spec approval), /orchestrator (orchestrated design→implement→review→QA→document), and /audit (codebase audit). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, qa-tester, and writer agents.",
+  "version": "1.1.0",
+  "description": "AI engineering pipeline with /workshop (spec approval), /orchestrator (orchestrated design→implement→review→QA→document), /audit (codebase audit), and optional Jev advisory signals (PR triage, stalled-loop check, spec check). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, qa-tester, and writer agents.",
   "author": {
     "name": "Ronaldo Gomes"
   },
@@ -23,7 +23,9 @@
     "pipeline",
     "engineering",
     "architecture",
-    "code-review"
+    "code-review",
+    "jev",
+    "typesafe"
   ],
   "types": "./types/index.d.ts",
   "userConfig": {
