@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), splits the spec into the smallest independent tasks, files them as Linear tickets or intent files (the user chooses), runs designer when the spec has a UI/UX or frontend surface (rendering a storyboard image, optionally uploaded to Figma), runs backend-engineer and frontend-engineer in parallel worktrees with one PR per task, always runs code-reviewer and qa-tester on every PR, loops until both are clean, then has writer document the result. Use after /workshop with the spec path, e.g. /orchestrator docs/specs/<slug>.md.
+description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), splits the spec into the smallest independent tasks, files them as Linear tickets or intent files (the user chooses), runs designer when the spec has a UI/UX or frontend surface (rendering a storyboard image, optionally uploaded to Figma), runs backend-engineer and frontend-engineer in parallel worktrees with one PR per task, always runs code-reviewer and qa-tester on every PR, loops until both are clean, then has writer document the result. Optional Jev signals (needs TYPESAFE_API_KEY) triage PRs, flag review loops that stop converging, and check the spec; they never replace a gate. Use after /workshop with the spec path, e.g. /orchestrator docs/specs/<slug>.md.
 model: Opus
 effort: medium
 ---
@@ -21,6 +21,7 @@ Idle agents still burn tokens while they wait.
 
 ## 1. Prepare
 1. Read the spec. If it has no "Acceptance criteria" section, stop and tell the user to run /workshop first.
+   Then run `scripts/jev.sh spec-check < <spec path>` (the `jev` skill). It is advisory: if it prints `FLAG` lines (or `UNAVAILABLE`), carry on and mention the flags in your final report; never stop for them.
 2. Check the spec's `Type:`. If it is `BUG` or `TICKET`, resolve reproduction before anything else in this section — see "1a. Verify reproduction" below. Do not start designer, backend-engineer, or frontend-engineer until that gate says `REPRODUCED`. A `FEATURE` spec skips straight to step 3.
 3. Read enough of the codebase to know which layers change. Check; do not assume.
 4. Check that PRs can be opened: `gh auth status` succeeds and `git remote get-url origin` points at GitHub. If not, tell the user what's missing and ask "Retry" / "Stop"; engineers can't submit work without it.
@@ -143,12 +144,13 @@ You do this yourself: subagents can't reach the user's MCP login.
 ## 5. Review and QA (mandatory, every PR, no exceptions)
 There is exactly one `code-reviewer` and one `qa-tester` at a time, each with its own queue. PRs wait in line when engineers submit faster than they can be checked.
 1. Queues: keep `Review queue:` and `QA queue:` lines in the handoff, oldest first, each entry `#<n> (task <task ID>, round <N>)`. Round N starts at 1 and goes up by one each time the engineer pushes a fix. When a PR is submitted or a fix is pushed, add it to the end of both queues.
-2. Hand out work. Whenever a queue has entries and its agent is free, give it the first entry and take that entry off the queue. If its agent isn't running, spawn it (Agent tool, `name` = `code-reviewer` / `qa-tester`); if it is running and free, send the entry with SendMessage. The two agents are independent (one reads the diff, the other runs the app), so they work on different PRs at the same time:
-   - `code-reviewer`: "Read <main worktree>/tmp/team/handoff.md. Review PR #<n> for task <task ID>. This is round <N>. Write your result to <main worktree>/tmp/team/review-pr-<n>-round-<N>.md."
+2. Triage. When a PR enters the review queue, run `gh pr diff <n> | scripts/jev.sh triage > tmp/team/jev-pr-<n>-round-<N>.md` (the `jev` skill). Triage only directs attention, it never shortens a review: every PR still gets the full `code-reviewer` and `qa-tester` pass. Use it for two things: when picking the next entry from either queue, take a PR with `JEV VERDICT: ATTENTION` before a `NO SIGNALS` one of equal age (oldest first otherwise), and tell `code-reviewer` about the flags (see its brief below). A file saying `UNAVAILABLE` means no triage; skip it.
+3. Hand out work. Whenever a queue has entries and its agent is free, give it the first entry and take that entry off the queue. If its agent isn't running, spawn it (Agent tool, `name` = `code-reviewer` / `qa-tester`); if it is running and free, send the entry with SendMessage. The two agents are independent (one reads the diff, the other runs the app), so they work on different PRs at the same time:
+   - `code-reviewer`: "Read <main worktree>/tmp/team/handoff.md. Review PR #<n> for task <task ID>. This is round <N>. Write your result to <main worktree>/tmp/team/review-pr-<n>-round-<N>.md." When the triage file exists and is not `UNAVAILABLE`, append: "Jev triage is at <main worktree>/tmp/team/jev-pr-<n>-round-<N>.md; give extra attention to the areas it flags."
    - `qa-tester`: "Read <main worktree>/tmp/team/handoff.md. QA test PR #<n> for task <task ID> end to end. This is round <N>. Write your result to <main worktree>/tmp/team/qa-pr-<n>-round-<N>.md."
-3. Each report covers one PR and comes back to you as soon as that PR is done. Act on it (steps 4-5), then hand that agent its next queue entry right away. If its queue is empty, stop it with `TaskStop`; spawn it again when a new entry arrives.
-4. A report says FINDINGS → set the task to `changes-requested` and route the fix to the PR's engineer (section 4, steps 4 and 6). If that PR's round is still waiting in the other queue, take it off: the fix starts a new round anyway. When the fix is pushed, set the task back to `in-review` and queue round N + 1 in both queues. There is no round limit.
-5. Both reports for the same round say `VERDICT: CLEAN` → set the task to `approved`. The engineer merges it before its next task; if no engineer will (no tasks left for it), merge it yourself as in section 4, step 1. Set it to `merged` (intent file status `done`).
+4. Each report covers one PR and comes back to you as soon as that PR is done. Act on it (steps 5-6), then hand that agent its next queue entry right away. If its queue is empty, stop it with `TaskStop`; spawn it again when a new entry arrives.
+5. A report says FINDINGS → set the task to `changes-requested` and route the fix to the PR's engineer (section 4, steps 4 and 6). If that PR's round is still waiting in the other queue, take it off: the fix starts a new round anyway. When the fix is pushed, set the task back to `in-review` and queue round N + 1 in both queues. There is no round limit, but a loop that is not converging goes to the user: from round 2 on, run `scripts/jev.sh loop-guard tmp/team/review-pr-<n>-round-<N-1>.md tmp/team/review-pr-<n>-round-<N>.md` (and the same for the `qa-pr-` files) before routing the fix. On `JEV VERDICT: STALLED`, ask the user before routing the fix, with the question tool: "Keep looping" (Recommended) / "Revise the task or spec" / "Stop this task", the Jev signals in the description. Route the fix only on "Keep looping". `PROGRESSING` or `UNAVAILABLE` changes nothing: route the fix as usual.
+6. Both reports for the same round say `VERDICT: CLEAN` → set the task to `approved`. The engineer merges it before its next task; if no engineer will (no tasks left for it), merge it yourself as in section 4, step 1. Set it to `merged` (intent file status `done`).
 
 ## 6. Document
 Only after every task in the handoff is `merged` (every engineer, code-reviewer, and qa-tester agent should already be stopped per the agent hygiene rule above — if any is still running, stop it first): run `git pull --ff-only` in the main worktree, then spawn `writer` alone, with: "Read tmp/team/handoff.md. Implementation is complete, reviewed clean, QA passed and merged. Update README/API docs/comments for the files changed since <base commit>."
@@ -168,6 +170,7 @@ Then tell the user:
 - Tests and commands that ran, with results
 - Every QA test run and its outcome
 - Number of review/QA rounds per PR, and the final verdicts
+- Any Jev flags raised (spec check, triage, stalled loops) and what you did about them, or one line that Jev was unavailable
 - The design storyboard path, and the Figma URL if it was uploaded
 - Steps the user can follow to try the feature
 

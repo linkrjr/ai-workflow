@@ -14,7 +14,7 @@ You are scoping a feature from the idea passed as arguments. Stay in product lan
    Ask every question with your agent's question tool when it has one (`AskUserQuestion` in Claude Code), so the user picks an option with the arrow keys instead of typing: 2-4 options, the recommended one first with "(Recommended)" at the end of its label, and a one-line description per option. The tool adds a free-text "Other" by itself, so don't add one. Only when no such tool exists, write the options as a numbered list and ask for the number. This covers steps 2, 3 and 6 too.
 5. Keep a list of open decisions. Continue until it is empty. Cover: who can use it, every state (empty, loading, error), limits and defaults, what must stay unchanged, what is out of scope.
 6. Read back the decisions in one list and ask the user to confirm.
-7. Write the spec with the template below. Show it to the user, then save it to docs/specs/<slug>.md after they approve.
+7. Write the spec with the template below. Pipe the draft through `scripts/jev.sh spec-check` (the `jev` skill; it prints `UNAVAILABLE` and changes nothing when there is no `TYPESAFE_API_KEY`). Show the user the draft, and under it any `FLAG` lines in plain words, e.g. "Jev thinks AC3 may not be pass/fail testable". Offer to revise the flagged parts, but a flag is a hint, not a veto: the user decides. Save it to docs/specs/<slug>.md after they approve.
 
 ## Spec template
 

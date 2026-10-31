@@ -26,6 +26,7 @@ This plugin does not declare its external skill dependencies in `plugin.json` �
 | `writing-for-agents` | `agents/writer.md` | Same personal skills-dir symlink as above. `mattpocock-skills@claude-plugins-official` bundles an equivalent under `mattpocock-skills:writing-for-agents`, not referenced here. |
 | `handoff`, `pr` | `skills/orchestrator/SKILL.md` (the lead only — no worker agent invokes either) | Same personal skills-dir symlink as above. `mattpocock-skills@claude-plugins-official` bundles an equivalent `pr` under `mattpocock-skills:pr`, not referenced here. |
 | `code-review`, `security-review` | `agents/code-reviewer.md` | `code-review`: real, installable plugin, `code-review@claude-plugins-official`. `security-review`: no file footprint under `~/.claude/` — almost certainly a Claude Code built-in, not something to install. |
+| `jev` (this plugin's own skill, `skills/jev/`) | `skills/workshop/SKILL.md`, `skills/orchestrator/SKILL.md`, `agents/code-reviewer.md` | Optional. Needs `TYPESAFE_API_KEY` (early access, console.typesafe.ai/keys) plus `curl` and `jq`. Without the key every Jev step prints `UNAVAILABLE` and the pipeline runs exactly as before. |
 | `run`, `pinchtab` | `agents/qa-tester.md` | `run` and `pinchtab` are personal skills-dir symlinks, same as the row above. `pinchtab` drives UI workflows end to end; without it, UI surfaces are reported `BLOCKED` instead of tested. |
 
 **Verify before running a task:** confirm each bare skill name above resolves on your machine (e.g. it's listed when Claude Code loads skills, or symlinked under your skills directory). If `tdd`, `surgical-patch`, `safe-refactor`, `writing-for-agents`, `handoff`, or `pr` aren't available, either install an equivalent under that exact bare name, or accept that the corresponding engineering discipline (TDD, surgical patching, doc cleanup) will be silently skipped for this run.
@@ -46,6 +47,7 @@ The codebase has no application layers in the traditional sense — it is a set 
 | `backend-engineer` / `frontend-engineer` agents | Implementation workers, scoped to one layer each | `agents/backend-engineer.md`, `agents/frontend-engineer.md` |
 | `code-reviewer` agent | Mandatory, read-only review gate (no Edit/Write tools) | `agents/code-reviewer.md` |
 | `qa-tester` agent | Mandatory, read-only functional gate — runs the project locally and exercises every API/UI/CLI surface, runs alongside `code-reviewer`; one instance at a time, working through a queue of PRs | `agents/qa-tester.md` |
+| Jev signals (optional) | Advisory 0–1 signals from TypeSafe's Jev model: spec check after `/workshop`, PR triage before review, stall check on repeating review rounds. Never a gate | `skills/jev/scripts/jev.sh` |
 | `writer` agent | Final documentation pass, after both review and QA are clean | `agents/writer.md` |
 | Agent teams pane | Opens a right pane on session start: the leader's model, and one box per subagent the leader starts (status, simulated progress, tokens, estimated cost, effort). Costs use a hard-coded price table. Permission asks that need the person (none in auto mode, where the classifier decides) show in it with Proceed / Cancel (click, or type 1 / 2 in an empty prompt), which answer the ask; unanswered for 10 minutes, or with the pane off screen, the normal permission prompt asks instead. Two settings in `/config` (the plugin's `userConfig`): **Always On** (default on; off, the pane opens only from a `▸ agent teams` button above the prompt) and **Icons On** (default on; off hides the agent icons) | `hooks/register.tsx` |
 
@@ -78,6 +80,7 @@ The codebase has no application layers in the traditional sense — it is a set 
 | **subagent_type** | The Agent-tool parameter the lead passes to spawn a specific agent file by name (e.g. `"backend-engineer"`, `"designer"`). |
 | **Design doc** (`tmp/team/design.md`) | `designer`'s saved output (aesthetic direction, components, design choices) — linked from the handoff so both engineers can read it. |
 | **Type** | The spec's `FEATURE \| BUG \| TICKET` field, written by `workshop`. `BUG`/`TICKET` gate the pipeline on `ticket-reviewer`; `FEATURE` skips that gate. |
+| **Jev signal** | One line of `jev.sh` output, `<signal>: <0-1 value> FLAG\|ok`. Advisory only: a `FLAG` (value ≥ `JEV_FLAG_AT`, default 0.6) points attention at something, it never approves or blocks a PR. |
 | **Ticket review** (`tmp/team/ticket-review.md`) | `ticket-reviewer`'s saved report for a BUG/TICKET spec, ending in `STATUS: REPRODUCED \| NOT REPRODUCED \| BLOCKED`. Only `REPRODUCED` lets the pipeline continue. |
 
 ---
@@ -172,6 +175,14 @@ A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/worksh
 **What breaks:** skipping this lets scratch coordination files get committed into whatever repo the pipeline is running against.
 
 This list reflects the gotchas made explicit in `skills/orchestrator/SKILL.md` itself; it has not had a dedicated senior-engineer pass for gotchas beyond that (e.g. how `handoff.md` should be amended mid-task, or what happens if an engineer disagrees with a finding). Add entries here as they're found.
+
+---
+
+**Jev is advisory, never a gate**
+
+**Rule:** `jev.sh` output (spec check, PR triage, loop-guard) may reorder the review queue, point `code-reviewer` at areas to look at first, and make the lead ask the user whether a stalled loop should continue. It must never skip, shorten or satisfy `code-reviewer`, `qa-tester` or the `VERDICT: CLEAN` rule, and a missing `TYPESAFE_API_KEY` or a failed call (`UNAVAILABLE`) must change nothing.
+**Why:** Jev only sees the text it is sent (a diff, a spec, two findings files). It cannot run the app or read the rest of the repo, and its scores are not calibrated against this repo's code.
+**What breaks:** treating a low-risk triage as a review lets a contract break or runtime failure ship; treating `UNAVAILABLE` as a failure would stop the pipeline for people without a key.
 
 ---
 

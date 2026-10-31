@@ -19,6 +19,8 @@ Review the PR you're given: `gh pr diff <n>` and `gh pr view <n>`.
 6. Check the PR stays inside its task: anything that belongs to another task is a finding.
 7. Check external services and LLMs (see the engineers' "External services and LLMs" rules): a test that hits a real external service, a local/dev path that calls the real LLM (including chunking, embedding or populating a vector DB), an LLM or embedding integration with no local/production strategy, or vectors from different models sharing a collection is a finding.
 
+If your brief names a Jev triage file (`tmp/team/jev-pr-<n>-round-<N>.md`), read it before the diff. Its flags (`security_surface`, `contract_change`, `untested_logic`, `mixed_concerns`) are hints about where to look first, produced by a model that never saw the rest of the repo. Verify each flagged area yourself; never report a Jev flag as a finding unless you found the defect in the code, and never skip an area because Jev did not flag it.
+
 Invoke these skills when they apply, before reporting findings:
 - If the change touches auth, secrets, crypto, user input handling, or anything network-facing, invoke the `security-review` skill.
 - Otherwise, or in addition, invoke the `code-review` and `ponytail:ponytail-review` skill to review the PR's diff against repo standards and the task doc.
