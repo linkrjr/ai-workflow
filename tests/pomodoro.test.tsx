@@ -121,7 +121,33 @@ test('AC6: a pomodoro offers Pause and Stop; Pause freezes the countdown, Resume
   await ui.unmount()
 })
 
-test('AC4, AC5, AC8: a pomodoro counts and starts a break, a break ends in the waiting state; the 4th pomodoro earns the long break', { timeout: 30_000 }, async ($, on) => {
+test('AC6: a Resume that lands during a slow paused-band tick keeps the 1 s ticker', async ($, on) => {
+  // Holds the first redraw write of the once-a-minute paused tick, as a slow tick would.
+  let release!: () => void
+  const gate = new Promise<void>(resolve => (release = resolve))
+  let isHeld = false
+  on('state.set', { plugin: 'ai-workflow', key: 'pomodoroTick' }, async (_: any, e: any, next: any) => {
+    if (!isHeld) {
+      isHeld = true
+      await gate
+    }
+    return next(e)
+  })
+  const { clock } = await boot($, on)
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await ui.press({ key: 'pomodoro-pause' })
+  void clock.advance(MIN)
+  while (!isHeld) await new Promise(resolve => setTimeout(resolve, 5))
+  await ui.press({ key: 'pomodoro-resume' })
+  release()
+  await new Promise(resolve => setTimeout(resolve, 50))
+  await clock.advance(10_000)
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 24:50 · today ×0   ')
+  await ui.unmount()
+})
+
+test('AC4, AC5, AC8: a pomodoro counts and starts a break, a break ends in the waiting state; the 4th pomodoro earns the long break', { timeoutMs: 30_000 }, async ($, on) => {
   const { clock, toasts } = await boot($, on)
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -284,13 +310,14 @@ test('AC11: a yesterday count in the store reads as 0', async ($, on) => {
   await ui.unmount()
 })
 
-test('AC11: a stored count that is garbage reads as 0 and the timer keeps working', async ($, on) => {
-  const { clock, toasts } = await boot($, on, { startAt: NOV1, stored: { [DAY]: 'oops' } })
+test('AC11: a stored count that is garbage reads as 0, the finished pomodoro overwrites it with 1, and the timer keeps working', async ($, on) => {
+  const { clock, toasts, store } = await boot($, on, { startAt: NOV1, stored: { [DAY]: 'oops' } })
   const ui = await $.ui.mount(BAND)
   await run($)
   await clock.advance(25 * MIN)
   expect((await row(ui)).text).toBe('☕ Short break · 05:00 · today ×1   ')
   expect(toasts.at(-1)).toBe('Pomodoro done — take a 5-min break')
+  expect(store.get(DAY)).toEqual({ date: 'Sun Nov 01 2026', count: 1 })
   await ui.unmount()
 })
 
