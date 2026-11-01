@@ -9,9 +9,16 @@ const BAND = {
 
 const MIN = 60_000
 
-// The engine beneath the plugin: the clock, the command list, the toasts and an empty band.
-const boot = async ($: any, on: any, startAt = Date.parse('2026-11-01T09:00:00')) => {
+// The engine beneath the plugin: the clock, the cross-session store, the command list, the toasts and an empty band.
+const boot = async ($: any, on: any, startAt = Date.parse('2026-11-01T09:00:00'), stored: Record<string, unknown> = {}, isStoreBroken = false) => {
   const clock = mock.clock(on, { now: startAt })
+  // The cross-session store, in memory (the test's own `$` has no `$.store`).
+  const store = new Map(Object.entries(stored))
+  const broken = () => {
+    if (isStoreBroken) throw new Error('store unavailable')
+  }
+  on('store.get', (_: any, e: any) => (broken(), { value: store.get(e.key) }))
+  on('store.set', (_: any, e: any) => (broken(), store.set(e.key, e.value), { value: undefined }))
   const registered: string[] = []
   const toasts: string[] = []
   const draws = { engineBand: 0 }
@@ -27,7 +34,7 @@ const boot = async ($: any, on: any, startAt = Date.parse('2026-11-01T09:00:00')
     return <Box key="engine-band" />
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  return { clock, registered, toasts, draws }
+  return { clock, registered, toasts, draws, store }
 }
 
 // The Pomodoro row's text and the keys of its buttons.
@@ -198,6 +205,76 @@ test('AC12: closing the session ends its timer; the running pomodoro is not coun
   await clock.advance(30 * MIN)
   await run($)
   expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×0   ')
+  await ui.unmount()
+})
+
+const DAY = 'pomodoroDay'
+const NOV1 = Date.parse('2026-11-01T09:00:00')
+
+test('AC11: the band shows the count other sessions and earlier runs stored for today', async ($, on) => {
+  await boot($, on, NOV1, { [DAY]: { date: '2026-11-1', count: 3 } })
+  await run($)
+  const ui = await $.ui.mount(BAND)
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×3   ')
+  await ui.unmount()
+})
+
+test('AC4, AC11: a finished pomodoro adds 1 to the stored count, which another session may have raised meanwhile', async ($, on) => {
+  const { clock, store } = await boot($, on, NOV1, { [DAY]: { date: '2026-11-1', count: 3 } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  store.set(DAY, { date: '2026-11-1', count: 5 }) // another session finished two
+  await clock.advance(25 * MIN)
+  expect((await row(ui)).text).toBe('☕ Short break · 05:00 · today ×6   ')
+  expect(store.get(DAY)).toEqual({ date: '2026-11-1', count: 6 })
+  await ui.unmount()
+})
+
+test('AC7, AC12: a stopped or abandoned pomodoro leaves the stored count alone', async ($, on) => {
+  const { clock, store } = await boot($, on, NOV1, { [DAY]: { date: '2026-11-1', count: 2 } })
+  await run($)
+  await clock.advance(10 * MIN)
+  await $.session.end({ reason: 'other', sessionId: 's1', resume: { id: 's1' } })
+  expect(store.get(DAY)).toEqual({ date: '2026-11-1', count: 2 })
+})
+
+test('AC11: the count resets to 0 at local midnight', async ($, on) => {
+  const { clock, store } = await boot($, on, Date.parse('2026-11-01T23:50:00'), { [DAY]: { date: '2026-11-1', count: 7 } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×7   ')
+  await clock.advance(25 * MIN) // finishes at 00:15 on Nov 2: counts on that date
+  expect((await row(ui)).text).toBe('☕ Short break · 05:00 · today ×1   ')
+  expect(store.get(DAY)).toEqual({ date: '2026-11-2', count: 1 })
+  await ui.unmount()
+})
+
+test('AC11: a yesterday count in the store reads as 0', async ($, on) => {
+  await boot($, on, NOV1, { [DAY]: { date: '2026-10-31', count: 9 } })
+  await run($)
+  const ui = await $.ui.mount(BAND)
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×0   ')
+  await ui.unmount()
+})
+
+test('AC11: a stored count that is garbage reads as 0 and the timer keeps working', async ($, on) => {
+  const { clock, toasts } = await boot($, on, NOV1, { [DAY]: 'oops' })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await clock.advance(25 * MIN)
+  expect((await row(ui)).text).toBe('☕ Short break · 05:00 · today ×1   ')
+  expect(toasts.at(-1)).toBe('Pomodoro done — take a 5-min break')
+  await ui.unmount()
+})
+
+test('AC11: a store that cannot be read or written counts from 0 and the timer keeps working', async ($, on) => {
+  const { clock, toasts } = await boot($, on, NOV1, {}, true)
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×0   ')
+  await clock.advance(25 * MIN)
+  expect((await row(ui)).text).toContain('☕ Short break · 05:00')
+  expect(toasts.at(-1)).toBe('Pomodoro done — take a 5-min break')
   await ui.unmount()
 })
 

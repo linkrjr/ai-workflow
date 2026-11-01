@@ -3,7 +3,7 @@ import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import type { Pomodoro } from '../types'
 
-const IDLE: Pomodoro = { phase: 'idle', position: 1, total: 4, count: 0 }
+const IDLE: Pomodoro = { phase: 'idle', position: 1, total: 4 }
 const pomodoro = atom({ plugin: 'ai-workflow', key: 'pomodoro' } as const, IDLE)
 // Bumped every second while a phase runs, so the countdown redraws.
 const tick = atom({ plugin: 'ai-workflow', key: 'pomodoroTick' } as const, 0)
@@ -13,6 +13,32 @@ const MINUTE = 60_000
 // A setting that is missing, not a whole number or out of range is its default.
 const whole = (v: unknown, min: number, max: number, dflt: number) =>
   typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max ? v : dflt
+
+// Today's count is shared by every session through the cross-session store, as the local
+// date and the pomodoros finished on it. A stored day that isn't today's, or can't be read, is 0.
+const DAY = 'pomodoroDay'
+const dayOf = (ms: number) => {
+  const d = new Date(ms)
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+}
+
+async function todayCount($: EngineInterface, now: number) {
+  try {
+    const v = (await $.store.get(DAY)) as { date?: unknown; count?: unknown } | undefined
+    return v?.date === dayOf(now) && typeof v.count === 'number' && Number.isInteger(v.count) && v.count > 0 ? v.count : 0
+  } catch {
+    return 0
+  }
+}
+
+// ponytail: read-then-write, so two sessions finishing in the same instant can lose one; a lock if that ever matters
+async function countOne($: EngineInterface, now: number) {
+  try {
+    await $.store.set(DAY, { date: dayOf(now), count: (await todayCount($, now)) + 1 })
+  } catch {
+    // the toast and the break still come when the count can't be saved
+  }
+}
 
 const clock = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000))
@@ -69,8 +95,9 @@ async function onTick($: EngineInterface, c: Config) {
     ended = s
     if (s.phase !== 'work') return { ...s, phase: 'waiting', endsAt: undefined }
     const isLong = s.position >= s.total
-    return { ...s, count: s.count + 1, phase: isLong ? 'long' : 'short', endsAt: now + (isLong ? c.long : c.short) * MINUTE }
+    return { ...s, phase: isLong ? 'long' : 'short', endsAt: now + (isLong ? c.long : c.short) * MINUTE }
   })
+  if (ended?.phase === 'work') await countOne($, now)
   if (ended?.phase === 'work') alert($, `Pomodoro done — take a ${after.phase === 'long' ? c.long : c.short}-min break`)
   else if (ended) alert($, 'Break over — start your next pomodoro when ready')
   else await update($, tick, n => n + 1)
@@ -161,7 +188,9 @@ export async function pomodoroBand($: EngineInterface, e: RenderInput<'AboveProm
   const s = await read($, pomodoro)
   if (s.phase === 'idle') return undefined
   await read($, tick) // redraw on every tick while a phase runs
-  const left = s.phase === 'paused' ? s.leftMs ?? 0 : (s.endsAt ?? 0) - (await $.clock.now())
+  const now = await $.clock.now()
+  const left = s.phase === 'paused' ? s.leftMs ?? 0 : (s.endsAt ?? 0) - now
+  const count = await todayCount($, now)
   const { Box, Button, Text } = $.ui.resolve(e)
   const place = `${s.position}/${s.total}`
   const status = {
@@ -181,7 +210,7 @@ export async function pomodoroBand($: EngineInterface, e: RenderInput<'AboveProm
     <Box flexDirection="column">
       {above}
       <Box>
-        <Text>{status} · today ×{s.count}{'   '}</Text>
+        <Text>{status} · today ×{count}{'   '}</Text>
         {main}
         <Text> </Text>
         <Button key="pomodoro-stop" label="Stop" onPress={() => stop($)} />
