@@ -344,7 +344,9 @@ test('AC16: with the ring off a phase end shows the toast and plays no sound', {
   expect(rings).toEqual([])
 })
 
-test('AC16: with the ring on, or the setting missing, a phase end plays the ring', { options: { pomodoroRing: true } }, async ($, on) => {
+// NOT covered: "a change applies from the next phase end" — the kit cannot swap `options` mid-test (same limit as
+// the AC13 reload test); it holds because `ring` is read once per load into Config and the ticker keeps that `c`.
+test('AC16: with the ring explicitly on, a phase end plays the ring', { options: { pomodoroRing: true } }, async ($, on) => {
   const { clock, rings } = await boot($, on)
   await run($)
   await clock.advance(25 * MIN)
