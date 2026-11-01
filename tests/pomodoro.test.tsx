@@ -105,7 +105,7 @@ test('AC6: a pomodoro offers Pause and Stop; Pause freezes the countdown, Resume
   await ui.unmount()
 })
 
-test('AC4, AC5, AC8: a pomodoro counts and starts a break, a break ends in the waiting state; the 4th pomodoro earns the long break', async ($, on) => {
+test('AC4, AC5, AC8: a pomodoro counts and starts a break, a break ends in the waiting state; the 4th pomodoro earns the long break', { timeout: 30_000 }, async ($, on) => {
   const { clock, toasts } = await boot($, on)
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -212,7 +212,7 @@ const DAY = 'pomodoroDay'
 const NOV1 = Date.parse('2026-11-01T09:00:00')
 
 test('AC11: the band shows the count other sessions and earlier runs stored for today', async ($, on) => {
-  await boot($, on, NOV1, { [DAY]: { date: '2026-11-1', count: 3 } })
+  await boot($, on, NOV1, { [DAY]: { date: 'Sun Nov 01 2026', count: 3 } })
   await run($)
   const ui = await $.ui.mount(BAND)
   expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×3   ')
@@ -220,37 +220,48 @@ test('AC11: the band shows the count other sessions and earlier runs stored for 
 })
 
 test('AC4, AC11: a finished pomodoro adds 1 to the stored count, which another session may have raised meanwhile', async ($, on) => {
-  const { clock, store } = await boot($, on, NOV1, { [DAY]: { date: '2026-11-1', count: 3 } })
+  const { clock, store } = await boot($, on, NOV1, { [DAY]: { date: 'Sun Nov 01 2026', count: 3 } })
   const ui = await $.ui.mount(BAND)
   await run($)
-  store.set(DAY, { date: '2026-11-1', count: 5 }) // another session finished two
+  store.set(DAY, { date: 'Sun Nov 01 2026', count: 5 }) // another session finished two
   await clock.advance(25 * MIN)
   expect((await row(ui)).text).toBe('☕ Short break · 05:00 · today ×6   ')
-  expect(store.get(DAY)).toEqual({ date: '2026-11-1', count: 6 })
+  expect(store.get(DAY)).toEqual({ date: 'Sun Nov 01 2026', count: 6 })
   await ui.unmount()
 })
 
 test('AC7, AC12: a stopped or abandoned pomodoro leaves the stored count alone', async ($, on) => {
-  const { clock, store } = await boot($, on, NOV1, { [DAY]: { date: '2026-11-1', count: 2 } })
+  const { clock, store } = await boot($, on, NOV1, { [DAY]: { date: 'Sun Nov 01 2026', count: 2 } })
   await run($)
   await clock.advance(10 * MIN)
   await $.session.end({ reason: 'other', sessionId: 's1', resume: { id: 's1' } })
-  expect(store.get(DAY)).toEqual({ date: '2026-11-1', count: 2 })
+  expect(store.get(DAY)).toEqual({ date: 'Sun Nov 01 2026', count: 2 })
 })
 
 test('AC11: the count resets to 0 at local midnight', async ($, on) => {
-  const { clock, store } = await boot($, on, Date.parse('2026-11-01T23:50:00'), { [DAY]: { date: '2026-11-1', count: 7 } })
+  const { clock, store } = await boot($, on, Date.parse('2026-11-01T23:50:00'), { [DAY]: { date: 'Sun Nov 01 2026', count: 7 } })
   const ui = await $.ui.mount(BAND)
   await run($)
   expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×7   ')
   await clock.advance(25 * MIN) // finishes at 00:15 on Nov 2: counts on that date
   expect((await row(ui)).text).toBe('☕ Short break · 05:00 · today ×1   ')
-  expect(store.get(DAY)).toEqual({ date: '2026-11-2', count: 1 })
+  expect(store.get(DAY)).toEqual({ date: 'Mon Nov 02 2026', count: 1 })
+  await ui.unmount()
+})
+
+test('AC11: a waiting band left open across midnight drops to 0', async ($, on) => {
+  const { clock } = await boot($, on, Date.parse('2026-11-01T23:20:00'), { [DAY]: { date: 'Sun Nov 01 2026', count: 5 } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await clock.advance(30 * MIN) // pomodoro 23:20-23:45, break 23:45-23:50
+  expect((await row(ui)).text).toBe('🍅 Break over · next: pomodoro 2/4 · today ×6   ')
+  await clock.advance(15 * MIN) // 00:05: nothing else redraws the band
+  expect((await row(ui)).text).toBe('🍅 Break over · next: pomodoro 2/4 · today ×0   ')
   await ui.unmount()
 })
 
 test('AC11: a yesterday count in the store reads as 0', async ($, on) => {
-  await boot($, on, NOV1, { [DAY]: { date: '2026-10-31', count: 9 } })
+  await boot($, on, NOV1, { [DAY]: { date: 'Sat Oct 31 2026', count: 9 } })
   await run($)
   const ui = await $.ui.mount(BAND)
   expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×0   ')

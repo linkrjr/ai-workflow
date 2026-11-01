@@ -17,10 +17,7 @@ const whole = (v: unknown, min: number, max: number, dflt: number) =>
 // Today's count is shared by every session through the cross-session store, as the local
 // date and the pomodoros finished on it. A stored day that isn't today's, or can't be read, is 0.
 const DAY = 'pomodoroDay'
-const dayOf = (ms: number) => {
-  const d = new Date(ms)
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
-}
+const dayOf = (ms: number) => new Date(ms).toDateString() // local, one string per day
 
 async function todayCount($: EngineInterface, now: number) {
   try {
@@ -77,10 +74,22 @@ function alert($: EngineInterface, text: string) {
 // The hooks that call these sit in register.tsx and pass `$` to module-level functions only:
 // the engine reads a hooks module's source and refuses `$` or `on` handed to anything else.
 let ticker: ReturnType<EngineInterface['clock']['every']> | undefined
+let period = 0
 
 function stopTicking() {
   ticker?.cancel()
   ticker = undefined
+  period = 0
+}
+
+// One ticker per phase kind: every second while a phase runs, once a minute while the band
+// shows paused or waiting (so a band left open past midnight drops its count), none when idle.
+function syncTicker($: EngineInterface, c: Config, s: Pomodoro) {
+  const ms = isRunning(s) ? 1000 : s.phase === 'idle' ? 0 : MINUTE
+  if (ms === period) return
+  stopTicking()
+  period = ms
+  if (ms) ticker = $.clock.every(ms, () => void onTick($, c))
 }
 
 // Ends the running phase once it reaches 00:00: a pomodoro counts and a break follows,
@@ -97,43 +106,38 @@ async function onTick($: EngineInterface, c: Config) {
     const isLong = s.position >= s.total
     return { ...s, phase: isLong ? 'long' : 'short', endsAt: now + (isLong ? c.long : c.short) * MINUTE }
   })
-  if (ended?.phase === 'work') await countOne($, now)
-  if (ended?.phase === 'work') alert($, `Pomodoro done — take a ${after.phase === 'long' ? c.long : c.short}-min break`)
-  else if (ended) alert($, 'Break over — start your next pomodoro when ready')
+  if (ended?.phase === 'work') {
+    await countOne($, now)
+    alert($, `Pomodoro done — take a ${after.phase === 'long' ? c.long : c.short}-min break`)
+  } else if (ended) alert($, 'Break over — start your next pomodoro when ready')
   else await update($, tick, n => n + 1)
-  if (!isRunning(after)) stopTicking()
-}
-
-function startTicking($: EngineInterface, c: Config) {
-  ticker ??= $.clock.every(1000, () => void onTick($, c))
+  syncTicker($, c, after)
 }
 
 // Starts the next pomodoro from idle or waiting.
 async function start($: EngineInterface, c: Config) {
   const now = await $.clock.now()
-  await update($, pomodoro, (s): Pomodoro =>
+  syncTicker($, c, await update($, pomodoro, (s): Pomodoro =>
     s.phase === 'idle' || s.phase === 'waiting'
       ? { ...s, phase: 'work', position: s.phase === 'idle' ? 1 : upNext(s, c.cycle), total: c.cycle, endsAt: now + c.work * MINUTE }
       : s,
-  )
-  startTicking($, c)
+  ))
 }
 
-async function pause($: EngineInterface) {
+async function pause($: EngineInterface, c: Config) {
   const now = await $.clock.now()
   const after = await update($, pomodoro, (s): Pomodoro =>
     s.phase === 'work' && s.endsAt !== undefined ? { ...s, phase: 'paused', leftMs: s.endsAt - now, endsAt: undefined } : s,
   )
-  // A tick may have ended the pomodoro first: the break it started keeps its ticker.
-  if (after.phase === 'paused') stopTicking()
+  // A tick may have ended the pomodoro first: syncing from `after` keeps the break's ticker.
+  syncTicker($, c, after)
 }
 
 async function resume($: EngineInterface, c: Config) {
   const now = await $.clock.now()
-  await update($, pomodoro, (s): Pomodoro =>
+  syncTicker($, c, await update($, pomodoro, (s): Pomodoro =>
     s.phase === 'paused' ? { ...s, phase: 'work', endsAt: now + (s.leftMs ?? 0), leftMs: undefined } : s,
-  )
-  startTicking($, c)
+  ))
 }
 
 // Stop: the band hides and the cycle starts over; today's count stays.
@@ -142,11 +146,10 @@ async function stop($: EngineInterface) {
   stopTicking()
 }
 
-async function skip($: EngineInterface) {
-  await update($, pomodoro, (s): Pomodoro =>
+async function skip($: EngineInterface, c: Config) {
+  syncTicker($, c, await update($, pomodoro, (s): Pomodoro =>
     s.phase === 'short' || s.phase === 'long' ? { ...s, phase: 'waiting', endsAt: undefined } : s,
-  )
-  stopTicking()
+  ))
 }
 
 // session.start: registers /pomodoro, and after a reload (a changed setting) picks the
@@ -154,7 +157,7 @@ async function skip($: EngineInterface) {
 export async function openPomodoro($: EngineInterface, c: Config) {
   try {
     await $.command.register({ name: 'pomodoro', description: 'Start a Pomodoro, or show where the timer is' })
-    if (isRunning(await read($, pomodoro))) startTicking($, c)
+    syncTicker($, c, await read($, pomodoro))
   } catch {
     // the timer must never keep the agent teams pane from opening (the same hook)
   }
@@ -201,10 +204,10 @@ export async function pomodoroBand($: EngineInterface, e: RenderInput<'AboveProm
     waiting: `🍅 Break over · next: pomodoro ${upNext(s, c.cycle)}/${c.cycle}`,
   }[s.phase]
   const main =
-    s.phase === 'work' ? <Button key="pomodoro-pause" label="Pause" onPress={() => pause($)} />
+    s.phase === 'work' ? <Button key="pomodoro-pause" label="Pause" onPress={() => pause($, c)} />
     : s.phase === 'paused' ? <Button key="pomodoro-resume" label="Resume" onPress={() => resume($, c)} />
     : s.phase === 'waiting' ? <Button key="pomodoro-start" label="Start pomodoro" onPress={() => start($, c)} />
-    : <Button key="pomodoro-skip" label="Skip" onPress={() => skip($)} />
+    : <Button key="pomodoro-skip" label="Skip" onPress={() => skip($, c)} />
 
   return (
     <Box flexDirection="column">
