@@ -10,7 +10,17 @@ const BAND = {
 const MIN = 60_000
 
 // The engine beneath the plugin: the clock, the cross-session store, the command list, the toasts and an empty band.
-const boot = async ($: any, on: any, startAt = Date.parse('2026-11-01T09:00:00'), stored: Record<string, unknown> = {}, isStoreBroken = false) => {
+// Extras go in one named options object, never positional: { startAt, audioFails, stored, isStoreBroken }.
+const boot = async (
+  $: any,
+  on: any,
+  {
+    startAt = Date.parse('2026-11-01T09:00:00'),
+    audioFails = false,
+    stored = {},
+    isStoreBroken = false,
+  }: { startAt?: number; audioFails?: boolean; stored?: Record<string, unknown>; isStoreBroken?: boolean } = {},
+) => {
   const clock = mock.clock(on, { now: startAt })
   // The cross-session store, in memory (the test's own `$` has no `$.store`).
   const store = new Map(Object.entries(stored))
@@ -21,9 +31,15 @@ const boot = async ($: any, on: any, startAt = Date.parse('2026-11-01T09:00:00')
   on('store.set', (_: any, e: any) => (broken(), store.set(e.key, e.value), { value: undefined }))
   const registered: string[] = []
   const toasts: string[] = []
+  const rings: string[] = []
   const draws = { engineBand: 0 }
   on('command.register', (_: any, e: any) => (registered.push(e.name), { value: { command: e.name } }))
   on('ui.toast', (_: any, e: any) => (toasts.push(e.text), { value: undefined }))
+  on('audio.play', (_: any, e: any) => {
+    rings.push(e.clip.asset)
+    if (audioFails) throw new Error('no audio device')
+    return { value: undefined }
+  })
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.panes', () => ({ value: [] }))
   on('session.start', (_: any, e: any) => ({ cwd: e.cwd }))
@@ -34,7 +50,7 @@ const boot = async ($: any, on: any, startAt = Date.parse('2026-11-01T09:00:00')
     return <Box key="engine-band" />
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  return { clock, registered, toasts, draws, store }
+  return { clock, registered, toasts, rings, draws, store }
 }
 
 // The Pomodoro row's text and the keys of its buttons.
@@ -212,7 +228,7 @@ const DAY = 'pomodoroDay'
 const NOV1 = Date.parse('2026-11-01T09:00:00')
 
 test('AC11: the band shows the count other sessions and earlier runs stored for today', async ($, on) => {
-  await boot($, on, NOV1, { [DAY]: { date: 'Sun Nov 01 2026', count: 3 } })
+  await boot($, on, { startAt: NOV1, stored: { [DAY]: { date: 'Sun Nov 01 2026', count: 3 } } })
   await run($)
   const ui = await $.ui.mount(BAND)
   expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×3   ')
@@ -220,7 +236,7 @@ test('AC11: the band shows the count other sessions and earlier runs stored for 
 })
 
 test('AC4, AC11: a finished pomodoro adds 1 to the stored count, which another session may have raised meanwhile', async ($, on) => {
-  const { clock, store } = await boot($, on, NOV1, { [DAY]: { date: 'Sun Nov 01 2026', count: 3 } })
+  const { clock, store } = await boot($, on, { startAt: NOV1, stored: { [DAY]: { date: 'Sun Nov 01 2026', count: 3 } } })
   const ui = await $.ui.mount(BAND)
   await run($)
   store.set(DAY, { date: 'Sun Nov 01 2026', count: 5 }) // another session finished two
@@ -231,7 +247,7 @@ test('AC4, AC11: a finished pomodoro adds 1 to the stored count, which another s
 })
 
 test('AC7, AC12: a stopped or abandoned pomodoro leaves the stored count alone', async ($, on) => {
-  const { clock, store } = await boot($, on, NOV1, { [DAY]: { date: 'Sun Nov 01 2026', count: 2 } })
+  const { clock, store } = await boot($, on, { startAt: NOV1, stored: { [DAY]: { date: 'Sun Nov 01 2026', count: 2 } } })
   await run($)
   await clock.advance(10 * MIN)
   await $.session.end({ reason: 'other', sessionId: 's1', resume: { id: 's1' } })
@@ -239,7 +255,7 @@ test('AC7, AC12: a stopped or abandoned pomodoro leaves the stored count alone',
 })
 
 test('AC11: the count resets to 0 at local midnight', async ($, on) => {
-  const { clock, store } = await boot($, on, Date.parse('2026-11-01T23:50:00'), { [DAY]: { date: 'Sun Nov 01 2026', count: 7 } })
+  const { clock, store } = await boot($, on, { startAt: Date.parse('2026-11-01T23:50:00'), stored: { [DAY]: { date: 'Sun Nov 01 2026', count: 7 } } })
   const ui = await $.ui.mount(BAND)
   await run($)
   expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×7   ')
@@ -250,7 +266,7 @@ test('AC11: the count resets to 0 at local midnight', async ($, on) => {
 })
 
 test('AC11: a waiting band left open across midnight drops to 0', async ($, on) => {
-  const { clock } = await boot($, on, Date.parse('2026-11-01T23:20:00'), { [DAY]: { date: 'Sun Nov 01 2026', count: 5 } })
+  const { clock } = await boot($, on, { startAt: Date.parse('2026-11-01T23:20:00'), stored: { [DAY]: { date: 'Sun Nov 01 2026', count: 5 } } })
   const ui = await $.ui.mount(BAND)
   await run($)
   await clock.advance(30 * MIN) // pomodoro 23:20-23:45, break 23:45-23:50
@@ -261,7 +277,7 @@ test('AC11: a waiting band left open across midnight drops to 0', async ($, on) 
 })
 
 test('AC11: a yesterday count in the store reads as 0', async ($, on) => {
-  await boot($, on, NOV1, { [DAY]: { date: 'Sat Oct 31 2026', count: 9 } })
+  await boot($, on, { startAt: NOV1, stored: { [DAY]: { date: 'Sat Oct 31 2026', count: 9 } } })
   await run($)
   const ui = await $.ui.mount(BAND)
   expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×0   ')
@@ -269,7 +285,7 @@ test('AC11: a yesterday count in the store reads as 0', async ($, on) => {
 })
 
 test('AC11: a stored count that is garbage reads as 0 and the timer keeps working', async ($, on) => {
-  const { clock, toasts } = await boot($, on, NOV1, { [DAY]: 'oops' })
+  const { clock, toasts } = await boot($, on, { startAt: NOV1, stored: { [DAY]: 'oops' } })
   const ui = await $.ui.mount(BAND)
   await run($)
   await clock.advance(25 * MIN)
@@ -279,7 +295,7 @@ test('AC11: a stored count that is garbage reads as 0 and the timer keeps workin
 })
 
 test('AC11: a store that cannot be read or written counts from 0 and the timer keeps working', async ($, on) => {
-  const { clock, toasts } = await boot($, on, NOV1, {}, true)
+  const { clock, toasts } = await boot($, on, { startAt: NOV1, isStoreBroken: true })
   const ui = await $.ui.mount(BAND)
   await run($)
   expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×0   ')
@@ -369,4 +385,44 @@ test('AC14: a Proceed / Cancel ask stays first, the Pomodoro row below it', asyn
   await ui.press({ key: 'band-cancel-t1' })
   await ui.unmount()
   expect((await verdict).decision).toBe('deny')
+})
+
+test('AC4, AC5: the ring plays with the toast at the end of a pomodoro and of a break', async ($, on) => {
+  const { clock, rings } = await boot($, on)
+  await run($)
+  await clock.advance(25 * MIN - 1000)
+  expect(rings).toEqual([])
+  await clock.advance(1000)
+  // The kit has no fs ($.fs is undefined under `claude plugin test`), so this only checks the path
+  // string; that assets/sounds/pomodoro-ring.wav exists on disk is not testable here.
+  expect(rings).toEqual(['assets/sounds/pomodoro-ring.wav'])
+  await clock.advance(5 * MIN)
+  expect(rings).toEqual(['assets/sounds/pomodoro-ring.wav', 'assets/sounds/pomodoro-ring.wav'])
+})
+
+test('AC8: Skip, Pause, Resume and Stop are silent', async ($, on) => {
+  const { clock, rings } = await boot($, on)
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await ui.press({ key: 'pomodoro-pause' })
+  await ui.press({ key: 'pomodoro-resume' })
+  await clock.advance(25 * MIN)
+  expect(rings.length).toBe(1) // the pomodoro's own end
+  await ui.press({ key: 'pomodoro-skip' })
+  await ui.press({ key: 'pomodoro-stop' })
+  expect(rings.length).toBe(1)
+  await ui.unmount()
+})
+
+test('AC4, AC5: when the ring cannot play the toast still shows and the timer goes on', async ($, on) => {
+  const { clock, toasts, rings } = await boot($, on, { audioFails: true })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await clock.advance(25 * MIN)
+  expect(rings.length).toBe(1)
+  expect(toasts.at(-1)).toBe('Pomodoro done — take a 5-min break')
+  await clock.advance(5 * MIN)
+  expect(toasts.at(-1)).toBe('Break over — start your next pomodoro when ready')
+  expect((await row(ui)).text).toContain('Break over')
+  await ui.unmount()
 })
