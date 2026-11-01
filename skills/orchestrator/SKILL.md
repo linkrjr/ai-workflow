@@ -178,7 +178,10 @@ Before you report, confirm that every task line in the handoff is `merged`, and 
 
 Close out the tasks. With Linear: for each task line with a `linear:` identifier, call `scripts/linear.sh set-state <IDENTIFIER> <TEAM_KEY> completed`. With intent files: check every intent file says `status: done`. Do this for all of them before reporting to the user — a task left open after the work is merged is stale state, not a minor detail.
 
-Remove the engineers' worktrees: `git worktree remove <path>` for each, then `git worktree prune`.
+Clean up so that only the base branch is left, locally and on the remote. Run every command from the main worktree:
+1. Remove the engineers' worktrees and any QA worktree still left: `git worktree remove --force <path>` for each, then `git worktree prune`. `git worktree list` must show only the main worktree.
+2. For each PR in the handoff, get its branch and state: `gh pr view <n> --json headRefName,state`. If the state is `MERGED`, delete the branch on both sides: `git push origin --delete <branch>` (skip it if the remote branch is already gone) and `git branch -D <branch>`. `-D` is needed because squash merges leave the branch unmerged in git's eyes; the `MERGED` state is your proof that the work is in the base. Never delete the base branch.
+3. `git fetch --prune origin`, then check that `git branch --list 'task/*'` and `git ls-remote --heads origin 'task/*'` both print nothing. Any branch still listed is an orphan: if its PR is merged, delete it as in step 2; if it isn't (e.g. a task stopped after a stalled loop), leave it and name it in the report so the user decides.
 
 Then tell the user:
 - What changed (files, one line each)
@@ -189,6 +192,7 @@ Then tell the user:
 - Number of review/QA rounds per PR, and the final verdicts
 - Any Jev flags raised (spec check, triage, stalled loops) and what you did about them, or one line that Jev was unavailable
 - The design storyboard path, and the Figma URL if it was uploaded
+- Branches deleted, and any unmerged branch left behind with its PR
 - Steps the user can follow to try the feature
 
 The writer's doc changes are left uncommitted in the main worktree. If the user asks for a PR for them, invoke the `pr` skill. If the work must pause, invoke the `handoff` skill before you stop.
