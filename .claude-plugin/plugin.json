@@ -38,6 +38,36 @@
       "title": "Agent teams pane · Icons On",
       "description": "Show each agent's icon in the agent teams pane.",
       "default": true
+    },
+    "pomodoroOn": {
+      "type": "boolean",
+      "title": "Pomodoro · On",
+      "description": "Offer the /pomodoro timer. Off: no /pomodoro command and no Pomodoro band.",
+      "default": true
+    },
+    "pomodoroWorkMinutes": {
+      "type": "number",
+      "title": "Pomodoro · Work minutes",
+      "description": "Length of a pomodoro, in whole minutes (1-120). Applies from the next phase that starts.",
+      "default": 25
+    },
+    "pomodoroShortBreakMinutes": {
+      "type": "number",
+      "title": "Pomodoro · Short break minutes",
+      "description": "Length of a short break, in whole minutes (1-120). Applies from the next phase that starts.",
+      "default": 5
+    },
+    "pomodoroLongBreakMinutes": {
+      "type": "number",
+      "title": "Pomodoro · Long break minutes",
+      "description": "Length of the long break after a full cycle, in whole minutes (1-120). Applies from the next phase that starts.",
+      "default": 15
+    },
+    "pomodoroPerCycle": {
+      "type": "number",
+      "title": "Pomodoro · Pomodoros per cycle",
+      "description": "Pomodoros before a long break (2-8). Applies from the next phase that starts.",
+      "default": 4
     }
   }
 }
