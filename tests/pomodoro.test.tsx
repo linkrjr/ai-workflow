@@ -201,10 +201,12 @@ test('AC12: closing the session ends its timer; the running pomodoro is not coun
   await ui.unmount()
 })
 
-// A reload (a changed setting) runs `session.start` again and keeps the stored phase. The kit cannot
-// swap `options` mid-test, so this covers the reload branch with the same lengths: the running phase
-// keeps its stored end, still ticks and still transitions. That a new length waits for the next phase
-// follows from the phase keeping its end and the lengths being read only when a phase starts.
+// A second `session.start` mid-phase (what a reload runs) keeps the stored phase: the running phase
+// keeps its stored end, still ticks and still transitions. The kit cannot swap `options` mid-test, so
+// this uses the same lengths. That a new length waits for the next phase follows from the phase
+// keeping its end and the lengths being read only when a phase starts. NOT covered: `openPomodoro`
+// picking the ticker back up after a real reload (the kit cannot restart the module, so the module's
+// ticker survives this second `session.start`).
 test('AC13: a reload mid-phase carries the countdown on from its stored end and still transitions', async ($, on) => {
   const { clock, toasts } = await boot($, on)
   const ui = await $.ui.mount(BAND)

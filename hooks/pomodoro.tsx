@@ -134,9 +134,13 @@ export async function openPomodoro($: EngineInterface, c: Config) {
 }
 
 // session.end: the timer belongs to the session (a /clear too), and a pomodoro still
-// running is never counted.
+// running is never counted. Never throws, for the same reason as openPomodoro.
 export async function closePomodoro($: EngineInterface) {
-  await stop($)
+  try {
+    await stop($)
+  } catch {
+    // the timer must never keep the agent teams pane from opening or closing (the same hooks)
+  }
 }
 
 // /pomodoro: starts the next pomodoro, or toasts where a running one is.
