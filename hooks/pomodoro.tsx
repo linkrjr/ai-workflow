@@ -19,11 +19,30 @@ const whole = (v: unknown, min: number, max: number, dflt: number) =>
 const DAY = 'pomodoroDay'
 const dayOf = (ms: number) => new Date(ms).toDateString() // local, one string per day
 
+// The store file the engine calls malformed ('' if its error names none), until a read or write
+// works again; and whether the person was told. Both start over with the module.
+let corrupt: string | undefined
+let isTold = false
+
+function judge(err: unknown) {
+  const msg = String((err as Error)?.message)
+  corrupt = msg.includes('is malformed') ? /store file (.+) is malformed/.exec(msg)?.[1] ?? '' : undefined
+}
+
+// Once per session; the Reset count button in the band is the way out.
+function tellCorrupt($: EngineInterface) {
+  if (corrupt === undefined || isTold) return
+  isTold = true
+  $.ui.toast("Today's Pomodoro count file is corrupt and can't be saved — use Reset count in the band to start it fresh.")
+}
+
 async function todayCount($: EngineInterface, now: number) {
   try {
     const v = (await $.store.get(DAY)) as { date?: unknown; count?: unknown } | undefined
+    corrupt = undefined
     return v?.date === dayOf(now) && typeof v.count === 'number' && Number.isInteger(v.count) && v.count > 0 ? v.count : 0
-  } catch {
+  } catch (err) {
+    judge(err)
     return 0
   }
 }
@@ -32,9 +51,34 @@ async function todayCount($: EngineInterface, now: number) {
 async function countOne($: EngineInterface, now: number) {
   try {
     await $.store.set(DAY, { date: dayOf(now), count: (await todayCount($, now)) + 1 })
-  } catch {
+    corrupt = undefined
+  } catch (err) {
     // the toast and the break still come when the count can't be saved
+    judge(err)
+    tellCorrupt($)
   }
+}
+
+// This plugin's own store file when the engine's error doesn't name it: the one file of its name in the
+// store folder, else none (a second install of the plugin keeps its own, and which is ours is unknown).
+async function ownStoreFile($: EngineInterface) {
+  const dir = `${(await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${await $.env.get('HOME')}/.claude`}/plugins/store`
+  const [mine, other] = (await $.fs.list(dir)).filter(f => f.name.startsWith(`${$.plugin.name}_`) && f.name.endsWith('.json'))
+  if (!mine || other) throw new Error('not one file')
+  return `${dir}/${mine.name}`
+}
+
+// Reset count: the person's click is the approval to rewrite that one file as an empty store.
+async function resetCount($: EngineInterface) {
+  let file = corrupt
+  try {
+    file ||= await ownStoreFile($)
+    await $.fs.write(file, '{}')
+    corrupt = undefined
+  } catch {
+    $.ui.toast(`Couldn't reset the count — delete ${file ? `this file by hand: ${file}` : `this plugin's file (${$.plugin.name}_…) in the plugins/store folder by hand`}`)
+  }
+  await update($, tick, n => n + 1)
 }
 
 const clock = (ms: number) => {
@@ -121,6 +165,8 @@ async function onTick($: EngineInterface, c: Config) {
 // Starts the next pomodoro from idle or waiting.
 async function start($: EngineInterface, c: Config) {
   const now = await $.clock.now()
+  await todayCount($, now) // a corrupt count file is told at once, not at the first pomodoro's end
+  tellCorrupt($)
   await update($, pomodoro, (s): Pomodoro =>
     s.phase === 'idle' || s.phase === 'waiting'
       ? { ...s, phase: 'work', position: s.phase === 'idle' ? 1 : upNext(s, c.cycle), total: c.cycle, endsAt: now + c.work * MINUTE }
@@ -224,6 +270,8 @@ export async function pomodoroBand($: EngineInterface, e: RenderInput<'AboveProm
         {main}
         <Text> </Text>
         <Button key="pomodoro-stop" label="Stop" onPress={() => stop($)} />
+        {corrupt === undefined ? undefined : <Text> </Text>}
+        {corrupt === undefined ? undefined : <Button key="pomodoro-reset" label="Reset count" onPress={() => resetCount($)} />}
       </Box>
     </Box>
   )

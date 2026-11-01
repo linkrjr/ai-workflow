@@ -10,7 +10,7 @@ const BAND = {
 const MIN = 60_000
 
 // The engine beneath the plugin: the clock, the cross-session store, the command list, the toasts and an empty band.
-// Extras go in one named options object, never positional: { startAt, audioFails, stored, isStoreBroken }.
+// Extras go in one named options object, never positional: { startAt, audioFails, stored, isStoreBroken, corrupt, resetFails }.
 const boot = async (
   $: any,
   on: any,
@@ -19,16 +19,39 @@ const boot = async (
     audioFails = false,
     stored = {},
     isStoreBroken = false,
-  }: { startAt?: number; audioFails?: boolean; stored?: Record<string, unknown>; isStoreBroken?: boolean } = {},
+    corrupt,
+    resetFails = false,
+  }: {
+    startAt?: number
+    audioFails?: boolean
+    stored?: Record<string, unknown>
+    isStoreBroken?: boolean
+    // The store file is malformed until it is rewritten; `hidePath` leaves its path out of the engine's error.
+    corrupt?: { file: string; hidePath?: boolean }
+    resetFails?: boolean
+  } = {},
 ) => {
   const clock = mock.clock(on, { now: startAt })
   // The cross-session store, in memory (the test's own `$` has no `$.store`).
   const store = new Map(Object.entries(stored))
-  const broken = () => {
-    if (isStoreBroken) throw new Error('store unavailable')
-  }
-  on('store.get', (_: any, e: any) => (broken(), { value: store.get(e.key) }))
-  on('store.set', (_: any, e: any) => (broken(), store.set(e.key, e.value), { value: undefined }))
+  let corruptFile = corrupt?.file
+  // Why a store call is refused (a `deny` makes the plugin's call reject with it, as the engine's own error does).
+  const broken = () =>
+    isStoreBroken ? 'store unavailable'
+    : corruptFile ? `ai-workflow@inline: store file ${corrupt?.hidePath ? '' : `${corruptFile} `}is malformed (JSON Parse error: Unexpected EOF)`
+    : undefined
+  // The file system: a write to the corrupt file heals it; every write is kept to show no other file is touched.
+  const writes: { path: string; text: string }[] = []
+  on('fs.write', (_: any, e: any) => {
+    writes.push({ path: e.path, text: e.text })
+    if (resetFails) return { deny: 'EACCES' }
+    if (e.path === corruptFile) corruptFile = undefined
+    return { value: undefined }
+  })
+  on('fs.list', () => ({ value: [{ name: 'ai-workflow_inline-1a.json' }, { name: 'skins_inline-2b.json' }, { name: 'notes.txt' }] }))
+  on('env.get', (_: any, e: any) => ({ value: e.name === 'HOME' ? '/home/me' : undefined }))
+  on('store.get', (_: any, e: any) => (broken() ? { deny: broken() } : { value: store.get(e.key) }))
+  on('store.set', (_: any, e: any) => (broken() ? { deny: broken() } : (store.set(e.key, e.value), { value: undefined })))
   const registered: string[] = []
   const toasts: string[] = []
   const rings: string[] = []
@@ -50,7 +73,7 @@ const boot = async (
     return <Box key="engine-band" />
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  return { clock, registered, toasts, rings, draws, store }
+  return { clock, registered, toasts, rings, draws, store, writes }
 }
 
 // The Pomodoro row's text and the keys of its buttons.
@@ -329,6 +352,85 @@ test('AC11: a store that cannot be read or written counts from 0 and the timer k
   await clock.advance(25 * MIN)
   expect((await row(ui)).text).toContain('☕ Short break · 05:00')
   expect(toasts.at(-1)).toBe('Pomodoro done — take a 5-min break')
+  await ui.unmount()
+})
+
+const FILE = '/home/me/.claude/plugins/store/ai-workflow_inline-1a.json'
+const CORRUPT_TOAST = "Today's Pomodoro count file is corrupt and can't be saved — use Reset count in the band to start it fresh."
+
+test('AC15: a corrupt count file toasts once per session, however many times it fails', async ($, on) => {
+  const { clock, toasts } = await boot($, on, { startAt: NOV1, corrupt: { file: FILE } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await clock.advance(25 * MIN) // the count can't be saved: the same failure again
+  await clock.advance(5 * MIN)
+  await run($)
+  await clock.advance(25 * MIN)
+  expect(toasts.filter(t => t === CORRUPT_TOAST)).toHaveLength(1)
+  expect((await row(ui)).text).toContain('☕ Short break')
+  await ui.unmount()
+})
+
+test('AC15: a store that fails for any other reason shows no toast and no Reset count', async ($, on) => {
+  const { toasts } = await boot($, on, { startAt: NOV1, isStoreBroken: true })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  expect(toasts).toEqual([])
+  expect(await ui.find({ key: 'pomodoro-reset' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('AC15: a healthy store has no Reset count and no toast', async ($, on) => {
+  const { toasts } = await boot($, on, { startAt: NOV1 })
+  await run($)
+  const ui = await $.ui.mount(BAND)
+  expect(await ui.find({ key: 'pomodoro-reset' })).toBeUndefined()
+  await ui.unmount()
+  expect(toasts).toEqual([])
+})
+
+test('AC15: Reset count is offered while the file is corrupt, after the other buttons, and not once it is reset', async ($, on) => {
+  await boot($, on, { startAt: NOV1, corrupt: { file: FILE } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  expect(await buttons(ui)).toEqual(['pomodoro-pause', 'pomodoro-stop', 'pomodoro-reset'])
+  await ui.press({ key: 'pomodoro-reset' })
+  expect(await buttons(ui)).toEqual(['pomodoro-pause', 'pomodoro-stop'])
+  await ui.unmount()
+})
+
+test('AC15: Reset count rewrites only the corrupt file, the band shows ×0 and later pomodoros count again', async ($, on) => {
+  const { clock, store, writes, toasts } = await boot($, on, { startAt: NOV1, corrupt: { file: FILE } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await ui.press({ key: 'pomodoro-reset' })
+  expect(writes).toEqual([{ path: FILE, text: '{}' }])
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×0   ')
+  await clock.advance(25 * MIN)
+  expect((await row(ui)).text).toBe('☕ Short break · 05:00 · today ×1   ')
+  expect(store.get(DAY)).toEqual({ date: 'Sun Nov 01 2026', count: 1 })
+  expect(toasts.filter(t => t.includes('Reset count'))).toHaveLength(1)
+  await ui.unmount()
+})
+
+test('AC15: when the rewrite fails a toast names the file to delete by hand, and Reset count stays', async ($, on) => {
+  const { toasts, writes } = await boot($, on, { startAt: NOV1, corrupt: { file: FILE }, resetFails: true })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await ui.press({ key: 'pomodoro-reset' })
+  expect(writes.map(w => w.path)).toEqual([FILE])
+  expect(toasts.at(-1)).toBe(`Couldn't reset the count — delete this file by hand: ${FILE}`)
+  expect(await ui.find({ key: 'pomodoro-reset' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('AC15: an error without the file path falls back to this plugin\'s own file in the store folder', async ($, on) => {
+  const { writes } = await boot($, on, { startAt: NOV1, corrupt: { file: FILE, hidePath: true } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await ui.press({ key: 'pomodoro-reset' })
+  // The mock lists three files; only ai-workflow_inline-1a.json is this plugin's.
+  expect(writes).toEqual([{ path: FILE, text: '{}' }])
   await ui.unmount()
 })
 
