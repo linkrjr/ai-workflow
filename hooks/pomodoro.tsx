@@ -3,7 +3,7 @@ import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import type { Pomodoro } from '../types'
 
-const IDLE: Pomodoro = { phase: 'idle', position: 1, total: 4, count: 0 }
+const IDLE: Pomodoro = { phase: 'idle', position: 1, total: 4 }
 const pomodoro = atom({ plugin: 'ai-workflow', key: 'pomodoro' } as const, IDLE)
 // Bumped every second while a phase runs, so the countdown redraws.
 const tick = atom({ plugin: 'ai-workflow', key: 'pomodoroTick' } as const, 0)
@@ -13,6 +13,71 @@ const MINUTE = 60_000
 // A setting that is missing, not a whole number or out of range is its default.
 const whole = (v: unknown, min: number, max: number, dflt: number) =>
   typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max ? v : dflt
+
+// Today's count is shared by every session through the cross-session store, as the local
+// date and the pomodoros finished on it. A stored day that isn't today's, or can't be read, is 0.
+const DAY = 'pomodoroDay'
+const dayOf = (ms: number) => new Date(ms).toDateString() // local, one string per day
+
+// The store file the engine calls malformed, until a read or write
+// works again; and whether the person was told. Both start over with the module.
+let corrupt: string | undefined
+let isTold = false
+
+function judge(err: unknown) {
+  const msg = String((err as Error)?.message)
+  corrupt = /store file (.+) is malformed/.exec(msg)?.[1]
+}
+
+// Once per session; the Reset count button in the band is the way out.
+function tellCorrupt($: EngineInterface) {
+  if (corrupt === undefined || isTold) return
+  isTold = true
+  $.ui.toast("Today's Pomodoro count file is corrupt and can't be saved — use Reset count in the band to start it fresh.")
+}
+
+async function todayCount($: EngineInterface, now: number) {
+  try {
+    const v = (await $.store.get(DAY)) as { date?: unknown; count?: unknown } | undefined
+    corrupt = undefined
+    return v?.date === dayOf(now) && typeof v.count === 'number' && Number.isInteger(v.count) && v.count > 0 ? v.count : 0
+  } catch (err) {
+    judge(err)
+    return 0
+  }
+}
+
+// ponytail: read-then-write, so two sessions finishing in the same instant can lose one; a lock if that ever matters
+async function countOne($: EngineInterface, now: number) {
+  try {
+    await $.store.set(DAY, { date: dayOf(now), count: (await todayCount($, now)) + 1 })
+    corrupt = undefined
+  } catch (err) {
+    // the toast and the break still come when the count can't be saved
+    judge(err)
+    tellCorrupt($)
+  }
+}
+
+// Reset count: the person's click is the approval to rewrite that one file as an empty store. It
+// acts only if a fresh read still finds the file corrupt (a stale or double press does nothing),
+// and only on this plugin's own store file, whatever path the error text names.
+async function resetCount($: EngineInterface) {
+  await todayCount($, await $.clock.now())
+  const file = corrupt
+  if (file) {
+    const at = file.lastIndexOf('/')
+    const isOwn = file.slice(0, at).endsWith('plugins/store') && file.slice(at + 1).startsWith(`${$.plugin.name}_`) && file.endsWith('.json')
+    try {
+      if (!isOwn) throw new Error('not this plugin\'s store file')
+      await $.fs.write(file, '{}')
+      corrupt = undefined
+    } catch {
+      $.ui.toast(`Couldn't reset the count — delete this file by hand: ${file}`)
+    }
+  }
+  await update($, tick, n => n + 1)
+}
 
 const clock = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000))
@@ -53,10 +118,25 @@ function alert($: EngineInterface, text: string, isRing: boolean) {
 // The hooks that call these sit in register.tsx and pass `$` to module-level functions only:
 // the engine reads a hooks module's source and refuses `$` or `on` handed to anything else.
 let ticker: ReturnType<EngineInterface['clock']['every']> | undefined
+let period = 0
 
 function stopTicking() {
   ticker?.cancel()
   ticker = undefined
+  period = 0
+}
+
+// One ticker per phase kind: every second while a phase runs, once a minute while the band
+// shows paused or waiting (so a band left open past midnight drops its count), none when idle.
+// It reads the current state itself: a caller's snapshot may be stale (a Resume landing during
+// a slow tick), and nothing awaits between the read and the swap below.
+async function syncTicker($: EngineInterface, c: Config) {
+  const s = await read($, pomodoro)
+  const ms = isRunning(s) ? 1000 : s.phase === 'idle' ? 0 : MINUTE
+  if (ms === period) return
+  stopTicking()
+  period = ms
+  if (ms) ticker = $.clock.every(ms, () => void onTick($, c))
 }
 
 // Ends the running phase once it reaches 00:00: a pomodoro counts and a break follows,
@@ -71,36 +151,36 @@ async function onTick($: EngineInterface, c: Config) {
     ended = s
     if (s.phase !== 'work') return { ...s, phase: 'waiting', endsAt: undefined }
     const isLong = s.position >= s.total
-    return { ...s, count: s.count + 1, phase: isLong ? 'long' : 'short', endsAt: now + (isLong ? c.long : c.short) * MINUTE }
+    return { ...s, phase: isLong ? 'long' : 'short', endsAt: now + (isLong ? c.long : c.short) * MINUTE }
   })
-  if (ended?.phase === 'work') alert($, `Pomodoro done — take a ${after.phase === 'long' ? c.long : c.short}-min break`, c.ring)
-  else if (ended) alert($, 'Break over — start your next pomodoro when ready', c.ring)
+  if (ended?.phase === 'work') {
+    await countOne($, now)
+    alert($, `Pomodoro done — take a ${after.phase === 'long' ? c.long : c.short}-min break`, c.ring)
+  } else if (ended) alert($, 'Break over — start your next pomodoro when ready', c.ring)
   else await update($, tick, n => n + 1)
-  if (!isRunning(after)) stopTicking()
-}
-
-function startTicking($: EngineInterface, c: Config) {
-  ticker ??= $.clock.every(1000, () => void onTick($, c))
+  await syncTicker($, c)
 }
 
 // Starts the next pomodoro from idle or waiting.
 async function start($: EngineInterface, c: Config) {
   const now = await $.clock.now()
+  await todayCount($, now) // a corrupt count file is told at once, not at the first pomodoro's end
+  tellCorrupt($)
   await update($, pomodoro, (s): Pomodoro =>
     s.phase === 'idle' || s.phase === 'waiting'
       ? { ...s, phase: 'work', position: s.phase === 'idle' ? 1 : upNext(s, c.cycle), total: c.cycle, endsAt: now + c.work * MINUTE }
       : s,
   )
-  startTicking($, c)
+  await syncTicker($, c)
 }
 
-async function pause($: EngineInterface) {
+async function pause($: EngineInterface, c: Config) {
   const now = await $.clock.now()
-  const after = await update($, pomodoro, (s): Pomodoro =>
+  await update($, pomodoro, (s): Pomodoro =>
     s.phase === 'work' && s.endsAt !== undefined ? { ...s, phase: 'paused', leftMs: s.endsAt - now, endsAt: undefined } : s,
   )
-  // A tick may have ended the pomodoro first: the break it started keeps its ticker.
-  if (after.phase === 'paused') stopTicking()
+  // A tick may have ended the pomodoro first: the sync reads what stands, so the break keeps its ticker.
+  await syncTicker($, c)
 }
 
 async function resume($: EngineInterface, c: Config) {
@@ -108,7 +188,7 @@ async function resume($: EngineInterface, c: Config) {
   await update($, pomodoro, (s): Pomodoro =>
     s.phase === 'paused' ? { ...s, phase: 'work', endsAt: now + (s.leftMs ?? 0), leftMs: undefined } : s,
   )
-  startTicking($, c)
+  await syncTicker($, c)
 }
 
 // Stop: the band hides and the cycle starts over; today's count stays.
@@ -117,11 +197,11 @@ async function stop($: EngineInterface) {
   stopTicking()
 }
 
-async function skip($: EngineInterface) {
+async function skip($: EngineInterface, c: Config) {
   await update($, pomodoro, (s): Pomodoro =>
     s.phase === 'short' || s.phase === 'long' ? { ...s, phase: 'waiting', endsAt: undefined } : s,
   )
-  stopTicking()
+  await syncTicker($, c)
 }
 
 // session.start: registers /pomodoro, and after a reload (a changed setting) picks the
@@ -129,7 +209,7 @@ async function skip($: EngineInterface) {
 export async function openPomodoro($: EngineInterface, c: Config) {
   try {
     await $.command.register({ name: 'pomodoro', description: 'Start a Pomodoro, or show where the timer is' })
-    if (isRunning(await read($, pomodoro))) startTicking($, c)
+    await syncTicker($, c)
   } catch {
     // the timer must never keep the agent teams pane from opening (the same hook)
   }
@@ -163,7 +243,9 @@ export async function pomodoroBand($: EngineInterface, e: RenderInput<'AboveProm
   const s = await read($, pomodoro)
   if (s.phase === 'idle') return undefined
   await read($, tick) // redraw on every tick while a phase runs
-  const left = s.phase === 'paused' ? s.leftMs ?? 0 : (s.endsAt ?? 0) - (await $.clock.now())
+  const now = await $.clock.now()
+  const left = s.phase === 'paused' ? s.leftMs ?? 0 : (s.endsAt ?? 0) - now
+  const count = await todayCount($, now)
   const { Box, Button, Text } = $.ui.resolve(e)
   const place = `${s.position}/${s.total}`
   const status = {
@@ -174,19 +256,21 @@ export async function pomodoroBand($: EngineInterface, e: RenderInput<'AboveProm
     waiting: `🍅 Break over · next: pomodoro ${upNext(s, c.cycle)}/${c.cycle}`,
   }[s.phase]
   const main =
-    s.phase === 'work' ? <Button key="pomodoro-pause" label="Pause" onPress={() => pause($)} />
+    s.phase === 'work' ? <Button key="pomodoro-pause" label="Pause" onPress={() => pause($, c)} />
     : s.phase === 'paused' ? <Button key="pomodoro-resume" label="Resume" onPress={() => resume($, c)} />
     : s.phase === 'waiting' ? <Button key="pomodoro-start" label="Start pomodoro" onPress={() => start($, c)} />
-    : <Button key="pomodoro-skip" label="Skip" onPress={() => skip($)} />
+    : <Button key="pomodoro-skip" label="Skip" onPress={() => skip($, c)} />
 
   return (
     <Box flexDirection="column">
       {above}
       <Box>
-        <Text>{status} · today ×{s.count}{'   '}</Text>
+        <Text>{status} · today ×{count}{'   '}</Text>
         {main}
         <Text> </Text>
         <Button key="pomodoro-stop" label="Stop" onPress={() => stop($)} />
+        {corrupt === undefined ? undefined : <Text> </Text>}
+        {corrupt === undefined ? undefined : <Button key="pomodoro-reset" label="Reset count" onPress={() => resetCount($)} />}
       </Box>
     </Box>
   )

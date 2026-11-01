@@ -9,14 +9,48 @@ const BAND = {
 
 const MIN = 60_000
 
-// The engine beneath the plugin: the clock, the command list, the toasts and an empty band.
-// Extras go in one named options object, never positional: { startAt, audioFails }.
+// The engine beneath the plugin: the clock, the cross-session store, the command list, the toasts and an empty band.
+// Extras go in one named options object, never positional: { startAt, audioFails, stored, isStoreBroken, corrupt, resetFails }.
 const boot = async (
   $: any,
   on: any,
-  { startAt = Date.parse('2026-11-01T09:00:00'), audioFails = false }: { startAt?: number; audioFails?: boolean } = {},
+  {
+    startAt = Date.parse('2026-11-01T09:00:00'),
+    audioFails = false,
+    stored = {},
+    isStoreBroken = false,
+    corrupt,
+    resetFails = false,
+  }: {
+    startAt?: number
+    audioFails?: boolean
+    stored?: Record<string, unknown>
+    isStoreBroken?: boolean
+    // The store file is malformed until it is rewritten (or, with `healsAtRead`, until that many reads, as when another session resets it).
+    corrupt?: { file: string; healsAtRead?: number }
+    resetFails?: boolean
+  } = {},
 ) => {
   const clock = mock.clock(on, { now: startAt })
+  // The cross-session store, in memory (the test's own `$` has no `$.store`).
+  const store = new Map(Object.entries(stored))
+  let corruptFile = corrupt?.file
+  // Why a store call is refused (a `deny` makes the plugin's call reject with it, as the engine's own error does).
+  let reads = 0
+  const broken = () =>
+    isStoreBroken ? 'store unavailable'
+    : corruptFile ? `ai-workflow@inline: store file ${corruptFile} is malformed (JSON Parse error: Unexpected EOF)`
+    : undefined
+  // The file system: a write to the corrupt file heals it; every write is kept to show no other file is touched.
+  const writes: { path: string; text: string }[] = []
+  on('fs.write', (_: any, e: any) => {
+    writes.push({ path: e.path, text: e.text })
+    if (resetFails) return { deny: 'EACCES' }
+    if (e.path === corruptFile) corruptFile = undefined
+    return { value: undefined }
+  })
+  on('store.get', (_: any, e: any) => (++reads === corrupt?.healsAtRead && (corruptFile = undefined), broken() ? { deny: broken() } : { value: store.get(e.key) }))
+  on('store.set', (_: any, e: any) => (broken() ? { deny: broken() } : (store.set(e.key, e.value), { value: undefined })))
   const registered: string[] = []
   const toasts: string[] = []
   const rings: string[] = []
@@ -38,7 +72,7 @@ const boot = async (
     return <Box key="engine-band" />
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  return { clock, registered, toasts, rings, draws }
+  return { clock, registered, toasts, rings, draws, store, writes }
 }
 
 // The Pomodoro row's text and the keys of its buttons.
@@ -109,7 +143,33 @@ test('AC6: a pomodoro offers Pause and Stop; Pause freezes the countdown, Resume
   await ui.unmount()
 })
 
-test('AC4, AC5, AC8: a pomodoro counts and starts a break, a break ends in the waiting state; the 4th pomodoro earns the long break', async ($, on) => {
+test('AC6: a Resume that lands during a slow paused-band tick keeps the 1 s ticker', async ($, on) => {
+  // Holds the first redraw write of the once-a-minute paused tick, as a slow tick would.
+  let release!: () => void
+  const gate = new Promise<void>(resolve => (release = resolve))
+  let isHeld = false
+  on('state.set', { plugin: 'ai-workflow', key: 'pomodoroTick' }, async (_: any, e: any, next: any) => {
+    if (!isHeld) {
+      isHeld = true
+      await gate
+    }
+    return next(e)
+  })
+  const { clock } = await boot($, on)
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await ui.press({ key: 'pomodoro-pause' })
+  void clock.advance(MIN)
+  while (!isHeld) await new Promise(resolve => setTimeout(resolve, 5))
+  await ui.press({ key: 'pomodoro-resume' })
+  release()
+  await new Promise(resolve => setTimeout(resolve, 50))
+  await clock.advance(10_000)
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 24:50 · today ×0   ')
+  await ui.unmount()
+})
+
+test('AC4, AC5, AC8: a pomodoro counts and starts a break, a break ends in the waiting state; the 4th pomodoro earns the long break', { timeoutMs: 30_000 }, async ($, on) => {
   const { clock, toasts } = await boot($, on)
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -211,6 +271,183 @@ test('AC12: closing the session ends its timer; the running pomodoro is not coun
   expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×0   ')
   await ui.unmount()
 })
+
+const DAY = 'pomodoroDay'
+const NOV1 = Date.parse('2026-11-01T09:00:00')
+
+test('AC11: the band shows the count other sessions and earlier runs stored for today', async ($, on) => {
+  await boot($, on, { startAt: NOV1, stored: { [DAY]: { date: 'Sun Nov 01 2026', count: 3 } } })
+  await run($)
+  const ui = await $.ui.mount(BAND)
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×3   ')
+  await ui.unmount()
+})
+
+test('AC4, AC11: a finished pomodoro adds 1 to the stored count, which another session may have raised meanwhile', async ($, on) => {
+  const { clock, store } = await boot($, on, { startAt: NOV1, stored: { [DAY]: { date: 'Sun Nov 01 2026', count: 3 } } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  store.set(DAY, { date: 'Sun Nov 01 2026', count: 5 }) // another session finished two
+  await clock.advance(25 * MIN)
+  expect((await row(ui)).text).toBe('☕ Short break · 05:00 · today ×6   ')
+  expect(store.get(DAY)).toEqual({ date: 'Sun Nov 01 2026', count: 6 })
+  await ui.unmount()
+})
+
+test('AC7, AC12: a stopped or abandoned pomodoro leaves the stored count alone', async ($, on) => {
+  const { clock, store } = await boot($, on, { startAt: NOV1, stored: { [DAY]: { date: 'Sun Nov 01 2026', count: 2 } } })
+  await run($)
+  await clock.advance(10 * MIN)
+  await $.session.end({ reason: 'other', sessionId: 's1', resume: { id: 's1' } })
+  expect(store.get(DAY)).toEqual({ date: 'Sun Nov 01 2026', count: 2 })
+})
+
+test('AC11: the count resets to 0 at local midnight', async ($, on) => {
+  const { clock, store } = await boot($, on, { startAt: Date.parse('2026-11-01T23:50:00'), stored: { [DAY]: { date: 'Sun Nov 01 2026', count: 7 } } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×7   ')
+  await clock.advance(25 * MIN) // finishes at 00:15 on Nov 2: counts on that date
+  expect((await row(ui)).text).toBe('☕ Short break · 05:00 · today ×1   ')
+  expect(store.get(DAY)).toEqual({ date: 'Mon Nov 02 2026', count: 1 })
+  await ui.unmount()
+})
+
+test('AC11: a waiting band left open across midnight drops to 0', async ($, on) => {
+  const { clock } = await boot($, on, { startAt: Date.parse('2026-11-01T23:20:00'), stored: { [DAY]: { date: 'Sun Nov 01 2026', count: 5 } } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await clock.advance(30 * MIN) // pomodoro 23:20-23:45, break 23:45-23:50
+  expect((await row(ui)).text).toBe('🍅 Break over · next: pomodoro 2/4 · today ×6   ')
+  await clock.advance(15 * MIN) // 00:05: nothing else redraws the band
+  expect((await row(ui)).text).toBe('🍅 Break over · next: pomodoro 2/4 · today ×0   ')
+  await ui.unmount()
+})
+
+test('AC11: a yesterday count in the store reads as 0', async ($, on) => {
+  await boot($, on, { startAt: NOV1, stored: { [DAY]: { date: 'Sat Oct 31 2026', count: 9 } } })
+  await run($)
+  const ui = await $.ui.mount(BAND)
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×0   ')
+  await ui.unmount()
+})
+
+test('AC11: a stored count that is garbage reads as 0, the finished pomodoro overwrites it with 1, and the timer keeps working', async ($, on) => {
+  const { clock, toasts, store } = await boot($, on, { startAt: NOV1, stored: { [DAY]: 'oops' } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await clock.advance(25 * MIN)
+  expect((await row(ui)).text).toBe('☕ Short break · 05:00 · today ×1   ')
+  expect(toasts.at(-1)).toBe('Pomodoro done — take a 5-min break')
+  expect(store.get(DAY)).toEqual({ date: 'Sun Nov 01 2026', count: 1 })
+  await ui.unmount()
+})
+
+test('AC11: a store that cannot be read or written counts from 0 and the timer keeps working', async ($, on) => {
+  const { clock, toasts } = await boot($, on, { startAt: NOV1, isStoreBroken: true })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×0   ')
+  await clock.advance(25 * MIN)
+  expect((await row(ui)).text).toContain('☕ Short break · 05:00')
+  expect(toasts.at(-1)).toBe('Pomodoro done — take a 5-min break')
+  await ui.unmount()
+})
+
+const FILE = '/home/me/.claude/plugins/store/ai-workflow_inline-1a.json'
+const CORRUPT_TOAST = "Today's Pomodoro count file is corrupt and can't be saved — use Reset count in the band to start it fresh."
+
+test('AC15: a corrupt count file toasts once per session, however many times it fails', async ($, on) => {
+  const { clock, toasts } = await boot($, on, { startAt: NOV1, corrupt: { file: FILE } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await clock.advance(25 * MIN) // the count can't be saved: the same failure again
+  await clock.advance(5 * MIN)
+  await run($)
+  await clock.advance(25 * MIN)
+  expect(toasts.filter(t => t === CORRUPT_TOAST)).toHaveLength(1)
+  expect((await row(ui)).text).toContain('☕ Short break')
+  await ui.unmount()
+})
+
+test('AC15: a store that fails for any other reason shows no toast and no Reset count', async ($, on) => {
+  const { toasts } = await boot($, on, { startAt: NOV1, isStoreBroken: true })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  expect(toasts).toEqual([])
+  expect(await ui.find({ key: 'pomodoro-reset' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('AC15: a healthy store has no Reset count and no toast', async ($, on) => {
+  const { toasts } = await boot($, on, { startAt: NOV1 })
+  await run($)
+  const ui = await $.ui.mount(BAND)
+  expect(await ui.find({ key: 'pomodoro-reset' })).toBeUndefined()
+  await ui.unmount()
+  expect(toasts).toEqual([])
+})
+
+test('AC15: Reset count is offered while the file is corrupt, after the other buttons, and not once it is reset', async ($, on) => {
+  await boot($, on, { startAt: NOV1, corrupt: { file: FILE } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  expect(await buttons(ui)).toEqual(['pomodoro-pause', 'pomodoro-stop', 'pomodoro-reset'])
+  await ui.press({ key: 'pomodoro-reset' })
+  expect(await buttons(ui)).toEqual(['pomodoro-pause', 'pomodoro-stop'])
+  await ui.unmount()
+})
+
+test('AC15: Reset count rewrites only the corrupt file, the band shows ×0 and later pomodoros count again', async ($, on) => {
+  const { clock, store, writes, toasts } = await boot($, on, { startAt: NOV1, corrupt: { file: FILE } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await ui.press({ key: 'pomodoro-reset' })
+  expect(writes).toEqual([{ path: FILE, text: '{}' }])
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×0   ')
+  await clock.advance(25 * MIN)
+  expect((await row(ui)).text).toBe('☕ Short break · 05:00 · today ×1   ')
+  expect(store.get(DAY)).toEqual({ date: 'Sun Nov 01 2026', count: 1 })
+  expect(toasts.filter(t => t.includes('Reset count'))).toHaveLength(1)
+  await ui.unmount()
+})
+
+test('AC15: when the rewrite fails a toast names the file to delete by hand, and Reset count stays', async ($, on) => {
+  const { toasts, writes } = await boot($, on, { startAt: NOV1, corrupt: { file: FILE }, resetFails: true })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await ui.press({ key: 'pomodoro-reset' })
+  expect(writes.map(w => w.path)).toEqual([FILE])
+  expect(toasts.at(-1)).toBe(`Couldn't reset the count — delete this file by hand: ${FILE}`)
+  expect(await ui.find({ key: 'pomodoro-reset' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('AC15: a press after the file healed rewrites nothing', async ($, on) => {
+  const { writes } = await boot($, on, { startAt: NOV1, corrupt: { file: FILE, healsAtRead: 3 } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await ui.press({ key: 'pomodoro-reset' })
+  expect(writes).toEqual([])
+  await ui.unmount()
+})
+
+// An error that names a file that is not this plugin's store file: the click writes nothing and the
+// toast names the file to delete by hand.
+const foreign = (file: string) => async ($: any, on: any) => {
+  const { writes, toasts } = await boot($, on, { startAt: NOV1, corrupt: { file } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await ui.press({ key: 'pomodoro-reset' })
+  expect(writes).toEqual([])
+  expect(toasts.at(-1)).toBe(`Couldn't reset the count — delete this file by hand: ${file}`)
+  await ui.unmount()
+}
+
+test('AC15: an error naming a file outside the store folder writes nothing', foreign('/home/me/Documents/precious.json'))
+test('AC15: an error naming another plugin\'s store file writes nothing', foreign('/home/me/.claude/plugins/store/skins_inline-2b.json'))
+test('AC15: an error naming a non-json file in the store folder writes nothing', foreign('/home/me/.claude/plugins/store/ai-workflow_inline-1a.txt'))
+test('AC15: an error naming this plugin\'s file name in another folder writes nothing', foreign('/home/me/.claude/notes/ai-workflow_inline-1a.json'))
 
 // A second `session.start` mid-phase (what a reload runs) keeps the stored phase: the running phase
 // keeps its stored end, still ticks and still transitions. The kit cannot swap `options` mid-test, so

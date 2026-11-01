@@ -43,7 +43,7 @@ export type Ask = {
 
 export type LogLine = { at: number; who: string; text: string; isError: boolean }
 
-// The session's Pomodoro timer. `count` is today's completed pomodoros.
+// The session's Pomodoro timer. Today's count is not here: it is shared across sessions in `$.store`.
 export type Pomodoro = {
   phase: 'idle' | 'work' | 'paused' | 'short' | 'long' | 'waiting'
   // the pomodoro running or just done, of `total` in the cycle it started in
@@ -53,7 +53,6 @@ export type Pomodoro = {
   endsAt?: number
   // a paused pomodoro: the ms it has left
   leftMs?: number
-  count: number
 }
 
 declare module 'claude-code' {
