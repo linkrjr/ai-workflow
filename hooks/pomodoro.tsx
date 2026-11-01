@@ -94,10 +94,11 @@ async function start($: EngineInterface, c: Config) {
 
 async function pause($: EngineInterface) {
   const now = await $.clock.now()
-  await update($, pomodoro, (s): Pomodoro =>
+  const after = await update($, pomodoro, (s): Pomodoro =>
     s.phase === 'work' && s.endsAt !== undefined ? { ...s, phase: 'paused', leftMs: s.endsAt - now, endsAt: undefined } : s,
   )
-  stopTicking()
+  // A tick may have ended the pomodoro first: the break it started keeps its ticker.
+  if (after.phase === 'paused') stopTicking()
 }
 
 async function resume($: EngineInterface, c: Config) {

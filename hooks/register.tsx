@@ -209,7 +209,9 @@ export const register: Register = (on, options) => {
   on('classic.UserPromptSubmit', ($, e, next) => ((mode = e.permission_mode), next(e)))
 
   on('session.start', async ($, e, next) => {
-    if (pomodoro) await openPomodoro($, pomodoro)
+    // With the setting off the stored phase is cleared, so turning it on again never
+    // finishes a pomodoro nobody saw.
+    await (pomodoro ? openPomodoro($, pomodoro) : closePomodoro($))
     // A reload (a changed setting) keeps the engine's panes: read whether ours is up.
     await update($, isPaneOpen, () => false)
     if (isAlwaysOn) void openPane($)
@@ -365,7 +367,7 @@ export const register: Register = (on, options) => {
   })
 
   on('session.end', async ($, e, next) => {
-    if (pomodoro) await closePomodoro($)
+    await closePomodoro($)
     return next(e)
   })
 
@@ -378,8 +380,9 @@ export const register: Register = (on, options) => {
   // `next` for its open button and asks, so this one is registered first, stands above it and
   // puts what it returns first.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const row = pomodoro && !e.props.hasSurvey ? await pomodoroBand($, e, await next(e), pomodoro) : undefined
-    return row ?? next(e)
+    const above = await next(e)
+    const row = pomodoro && !e.props.hasSurvey ? await pomodoroBand($, e, above, pomodoro) : undefined
+    return row ?? above
   })
 
   // The first answerable ask, above the prompt too: a bare 1 or 2 in an empty prompt answers it.

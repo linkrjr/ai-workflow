@@ -14,6 +14,7 @@ const boot = async ($: any, on: any, startAt = Date.parse('2026-11-01T09:00:00')
   const clock = mock.clock(on, { now: startAt })
   const registered: string[] = []
   const toasts: string[] = []
+  const draws = { engineBand: 0 }
   on('command.register', (_: any, e: any) => (registered.push(e.name), { value: { command: e.name } }))
   on('ui.toast', (_: any, e: any) => (toasts.push(e.text), { value: undefined }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
@@ -21,11 +22,12 @@ const boot = async ($: any, on: any, startAt = Date.parse('2026-11-01T09:00:00')
   on('session.start', (_: any, e: any) => ({ cwd: e.cwd }))
   on('session.end', (_: any, e: any) => ({ sessionId: e.sessionId }))
   on('ui.render', { component: 'AbovePrompt' }, ($: any, e: any) => {
+    draws.engineBand++
     const { Box } = $.ui.resolve(e)
     return <Box key="engine-band" />
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  return { clock, registered, toasts }
+  return { clock, registered, toasts, draws }
 }
 
 // The Pomodoro row's text and the keys of its buttons.
@@ -54,6 +56,13 @@ test('AC2: no band before /pomodoro is run', async ($, on) => {
   const ui = await $.ui.mount(BAND)
   expect((await row(ui)).text).toBeUndefined()
   expect(await ui.find({ key: 'engine-band' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('AC2: the idle band asks the hooks beneath for the band once per draw', async ($, on) => {
+  const { draws } = await boot($, on)
+  const ui = await $.ui.mount(BAND)
+  expect(draws.engineBand).toBe(1)
   await ui.unmount()
 })
 
@@ -189,6 +198,25 @@ test('AC12: closing the session ends its timer; the running pomodoro is not coun
   await clock.advance(30 * MIN)
   await run($)
   expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 25:00 · today ×0   ')
+  await ui.unmount()
+})
+
+// A reload (a changed setting) runs `session.start` again and keeps the stored phase. The kit cannot
+// swap `options` mid-test, so this covers the reload branch with the same lengths: the running phase
+// keeps its stored end, still ticks and still transitions. That a new length waits for the next phase
+// follows from the phase keeping its end and the lengths being read only when a phase starts.
+test('AC13: a reload mid-phase carries the countdown on from its stored end and still transitions', async ($, on) => {
+  const { clock, toasts } = await boot($, on)
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await clock.advance(10 * MIN)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 15:00 · today ×0   ')
+  await clock.advance(1000)
+  expect((await row(ui)).text).toBe('🍅 Pomodoro 1/4 · 14:59 · today ×0   ')
+  await clock.advance(15 * MIN)
+  expect((await row(ui)).text).toBe('☕ Short break · 04:59 · today ×1   ')
+  expect(toasts).toEqual(['Pomodoro done — take a 5-min break'])
   await ui.unmount()
 })
 
