@@ -10,13 +10,19 @@ const BAND = {
 const MIN = 60_000
 
 // The engine beneath the plugin: the clock, the command list, the toasts and an empty band.
-const boot = async ($: any, on: any, startAt = Date.parse('2026-11-01T09:00:00')) => {
+const boot = async ($: any, on: any, startAt = Date.parse('2026-11-01T09:00:00'), audioFails = false) => {
   const clock = mock.clock(on, { now: startAt })
   const registered: string[] = []
   const toasts: string[] = []
+  const rings: string[] = []
   const draws = { engineBand: 0 }
   on('command.register', (_: any, e: any) => (registered.push(e.name), { value: { command: e.name } }))
   on('ui.toast', (_: any, e: any) => (toasts.push(e.text), { value: undefined }))
+  on('audio.play', (_: any, e: any) => {
+    rings.push(e.clip.asset)
+    if (audioFails) throw new Error('no audio device')
+    return { value: undefined }
+  })
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.panes', () => ({ value: [] }))
   on('session.start', (_: any, e: any) => ({ cwd: e.cwd }))
@@ -27,7 +33,7 @@ const boot = async ($: any, on: any, startAt = Date.parse('2026-11-01T09:00:00')
     return <Box key="engine-band" />
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  return { clock, registered, toasts, draws }
+  return { clock, registered, toasts, rings, draws }
 }
 
 // The Pomodoro row's text and the keys of its buttons.
@@ -281,4 +287,42 @@ test('AC14: a Proceed / Cancel ask stays first, the Pomodoro row below it', asyn
   await ui.press({ key: 'band-cancel-t1' })
   await ui.unmount()
   expect((await verdict).decision).toBe('deny')
+})
+
+test('AC4, AC5: the ring plays with the toast at the end of a pomodoro and of a break', async ($, on) => {
+  const { clock, rings } = await boot($, on)
+  await run($)
+  await clock.advance(25 * MIN - 1000)
+  expect(rings).toEqual([])
+  await clock.advance(1000)
+  expect(rings).toEqual(['assets/sounds/pomodoro-ring.wav'])
+  await clock.advance(5 * MIN)
+  expect(rings).toEqual(['assets/sounds/pomodoro-ring.wav', 'assets/sounds/pomodoro-ring.wav'])
+})
+
+test('AC8: Skip, Pause, Resume and Stop are silent', async ($, on) => {
+  const { clock, rings } = await boot($, on)
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await ui.press({ key: 'pomodoro-pause' })
+  await ui.press({ key: 'pomodoro-resume' })
+  await clock.advance(25 * MIN)
+  expect(rings.length).toBe(1) // the pomodoro's own end
+  await ui.press({ key: 'pomodoro-skip' })
+  await ui.press({ key: 'pomodoro-stop' })
+  expect(rings.length).toBe(1)
+  await ui.unmount()
+})
+
+test('AC4, AC5: when the ring cannot play the toast still shows and the timer goes on', async ($, on) => {
+  const { clock, toasts, rings } = await boot($, on, undefined, true)
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await clock.advance(25 * MIN)
+  expect(rings.length).toBe(1)
+  expect(toasts.at(-1)).toBe('Pomodoro done — take a 5-min break')
+  await clock.advance(5 * MIN)
+  expect(toasts.at(-1)).toBe('Break over — start your next pomodoro when ready')
+  expect((await row(ui)).text).toContain('Break over')
+  await ui.unmount()
 })
