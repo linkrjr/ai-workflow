@@ -26,8 +26,8 @@ const boot = async (
     audioFails?: boolean
     stored?: Record<string, unknown>
     isStoreBroken?: boolean
-    // The store file is malformed until it is rewritten; `hidePath` leaves its path out of the engine's error.
-    corrupt?: { file: string; hidePath?: boolean }
+    // The store file is malformed until it is rewritten (or, with `healsAtRead`, until that many reads, as when another session resets it).
+    corrupt?: { file: string; healsAtRead?: number }
     resetFails?: boolean
   } = {},
 ) => {
@@ -36,9 +36,10 @@ const boot = async (
   const store = new Map(Object.entries(stored))
   let corruptFile = corrupt?.file
   // Why a store call is refused (a `deny` makes the plugin's call reject with it, as the engine's own error does).
+  let reads = 0
   const broken = () =>
     isStoreBroken ? 'store unavailable'
-    : corruptFile ? `ai-workflow@inline: store file ${corrupt?.hidePath ? '' : `${corruptFile} `}is malformed (JSON Parse error: Unexpected EOF)`
+    : corruptFile ? `ai-workflow@inline: store file ${corruptFile} is malformed (JSON Parse error: Unexpected EOF)`
     : undefined
   // The file system: a write to the corrupt file heals it; every write is kept to show no other file is touched.
   const writes: { path: string; text: string }[] = []
@@ -48,9 +49,7 @@ const boot = async (
     if (e.path === corruptFile) corruptFile = undefined
     return { value: undefined }
   })
-  on('fs.list', () => ({ value: [{ name: 'ai-workflow_inline-1a.json' }, { name: 'skins_inline-2b.json' }, { name: 'notes.txt' }] }))
-  on('env.get', (_: any, e: any) => ({ value: e.name === 'HOME' ? '/home/me' : undefined }))
-  on('store.get', (_: any, e: any) => (broken() ? { deny: broken() } : { value: store.get(e.key) }))
+  on('store.get', (_: any, e: any) => (++reads === corrupt?.healsAtRead && (corruptFile = undefined), broken() ? { deny: broken() } : { value: store.get(e.key) }))
   on('store.set', (_: any, e: any) => (broken() ? { deny: broken() } : (store.set(e.key, e.value), { value: undefined })))
   const registered: string[] = []
   const toasts: string[] = []
@@ -424,15 +423,31 @@ test('AC15: when the rewrite fails a toast names the file to delete by hand, and
   await ui.unmount()
 })
 
-test('AC15: an error without the file path falls back to this plugin\'s own file in the store folder', async ($, on) => {
-  const { writes } = await boot($, on, { startAt: NOV1, corrupt: { file: FILE, hidePath: true } })
+test('AC15: a press after the file healed rewrites nothing', async ($, on) => {
+  const { writes } = await boot($, on, { startAt: NOV1, corrupt: { file: FILE, healsAtRead: 3 } })
   const ui = await $.ui.mount(BAND)
   await run($)
   await ui.press({ key: 'pomodoro-reset' })
-  // The mock lists three files; only ai-workflow_inline-1a.json is this plugin's.
-  expect(writes).toEqual([{ path: FILE, text: '{}' }])
+  expect(writes).toEqual([])
   await ui.unmount()
 })
+
+// An error that names a file that is not this plugin's store file: the click writes nothing and the
+// toast names the file to delete by hand.
+const foreign = (file: string) => async ($: any, on: any) => {
+  const { writes, toasts } = await boot($, on, { startAt: NOV1, corrupt: { file } })
+  const ui = await $.ui.mount(BAND)
+  await run($)
+  await ui.press({ key: 'pomodoro-reset' })
+  expect(writes).toEqual([])
+  expect(toasts.at(-1)).toBe(`Couldn't reset the count — delete this file by hand: ${file}`)
+  await ui.unmount()
+}
+
+test('AC15: an error naming a file outside the store folder writes nothing', foreign('/home/me/Documents/precious.json'))
+test('AC15: an error naming another plugin\'s store file writes nothing', foreign('/home/me/.claude/plugins/store/skins_inline-2b.json'))
+test('AC15: an error naming a non-json file in the store folder writes nothing', foreign('/home/me/.claude/plugins/store/ai-workflow_inline-1a.txt'))
+test('AC15: an error naming this plugin\'s file name in another folder writes nothing', foreign('/home/me/.claude/notes/ai-workflow_inline-1a.json'))
 
 // A second `session.start` mid-phase (what a reload runs) keeps the stored phase: the running phase
 // keeps its stored end, still ticks and still transitions. The kit cannot swap `options` mid-test, so
@@ -554,4 +569,23 @@ test('AC4, AC5: when the ring cannot play the toast still shows and the timer go
   expect(toasts.at(-1)).toBe('Break over — start your next pomodoro when ready')
   expect((await row(ui)).text).toContain('Break over')
   await ui.unmount()
+})
+
+test('AC16: with the ring off a phase end shows the toast and plays no sound', { options: { pomodoroRing: false } }, async ($, on) => {
+  const { clock, toasts, rings } = await boot($, on)
+  await run($)
+  await clock.advance(25 * MIN)
+  expect(toasts.at(-1)).toBe('Pomodoro done — take a 5-min break')
+  await clock.advance(5 * MIN)
+  expect(toasts.at(-1)).toBe('Break over — start your next pomodoro when ready')
+  expect(rings).toEqual([])
+})
+
+// NOT covered: "a change applies from the next phase end" — the kit cannot swap `options` mid-test (same limit as
+// the AC13 reload test); it holds because `ring` is read once per load into Config and the ticker keeps that `c`.
+test('AC16: with the ring explicitly on, a phase end plays the ring', { options: { pomodoroRing: true } }, async ($, on) => {
+  const { clock, rings } = await boot($, on)
+  await run($)
+  await clock.advance(25 * MIN)
+  expect(rings.length).toBe(1)
 })

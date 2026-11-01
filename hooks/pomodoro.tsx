@@ -19,14 +19,14 @@ const whole = (v: unknown, min: number, max: number, dflt: number) =>
 const DAY = 'pomodoroDay'
 const dayOf = (ms: number) => new Date(ms).toDateString() // local, one string per day
 
-// The store file the engine calls malformed ('' if its error names none), until a read or write
+// The store file the engine calls malformed, until a read or write
 // works again; and whether the person was told. Both start over with the module.
 let corrupt: string | undefined
 let isTold = false
 
 function judge(err: unknown) {
   const msg = String((err as Error)?.message)
-  corrupt = msg.includes('is malformed') ? /store file (.+) is malformed/.exec(msg)?.[1] ?? '' : undefined
+  corrupt = /store file (.+) is malformed/.exec(msg)?.[1]
 }
 
 // Once per session; the Reset count button in the band is the way out.
@@ -59,24 +59,22 @@ async function countOne($: EngineInterface, now: number) {
   }
 }
 
-// This plugin's own store file when the engine's error doesn't name it: the one file of its name in the
-// store folder, else none (a second install of the plugin keeps its own, and which is ours is unknown).
-async function ownStoreFile($: EngineInterface) {
-  const dir = `${(await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${await $.env.get('HOME')}/.claude`}/plugins/store`
-  const [mine, other] = (await $.fs.list(dir)).filter(f => f.name.startsWith(`${$.plugin.name}_`) && f.name.endsWith('.json'))
-  if (!mine || other) throw new Error('not one file')
-  return `${dir}/${mine.name}`
-}
-
-// Reset count: the person's click is the approval to rewrite that one file as an empty store.
+// Reset count: the person's click is the approval to rewrite that one file as an empty store. It
+// acts only if a fresh read still finds the file corrupt (a stale or double press does nothing),
+// and only on this plugin's own store file, whatever path the error text names.
 async function resetCount($: EngineInterface) {
-  let file = corrupt
-  try {
-    file ||= await ownStoreFile($)
-    await $.fs.write(file, '{}')
-    corrupt = undefined
-  } catch {
-    $.ui.toast(`Couldn't reset the count — delete ${file ? `this file by hand: ${file}` : `this plugin's file (${$.plugin.name}_…) in the plugins/store folder by hand`}`)
+  await todayCount($, await $.clock.now())
+  const file = corrupt
+  if (file) {
+    const at = file.lastIndexOf('/')
+    const isOwn = file.slice(0, at).endsWith('plugins/store') && file.slice(at + 1).startsWith(`${$.plugin.name}_`) && file.endsWith('.json')
+    try {
+      if (!isOwn) throw new Error('not this plugin\'s store file')
+      await $.fs.write(file, '{}')
+      corrupt = undefined
+    } catch {
+      $.ui.toast(`Couldn't reset the count — delete this file by hand: ${file}`)
+    }
   }
   await update($, tick, n => n + 1)
 }
@@ -97,7 +95,7 @@ const upNext = (s: Pomodoro, cycle: number) => {
 // The lengths in minutes, read once per load: a changed setting reloads the module, and a
 // phase already running keeps its stored end, so a new length applies from the next phase.
 // Undefined with the setting off.
-export type Config = { work: number; short: number; long: number; cycle: number }
+export type Config = { work: number; short: number; long: number; cycle: number; ring: boolean }
 
 export const pomodoroConfig = (options: Record<string, unknown>): Config | undefined =>
   options.pomodoroOn === false
@@ -107,13 +105,14 @@ export const pomodoroConfig = (options: Record<string, unknown>): Config | undef
         short: whole(options.pomodoroShortBreakMinutes, 1, 120, 5),
         long: whole(options.pomodoroLongBreakMinutes, 1, 120, 15),
         cycle: whole(options.pomodoroPerCycle, 2, 8, 4),
+        ring: options.pomodoroRing !== false,
       }
 
 // The toast and the ring for a phase's end. The ring is not awaited, and a clip that can't
-// play (no player, no audio device) is dropped: the toast and the timer go on.
-function alert($: EngineInterface, text: string) {
+// play (no player, no audio device) is dropped: the toast and the timer go on. Ring off: toast only.
+function alert($: EngineInterface, text: string, isRing: boolean) {
   $.ui.toast(text)
-  $.audio.play({ asset: 'assets/sounds/pomodoro-ring.wav' }).catch(() => {})
+  if (isRing) $.audio.play({ asset: 'assets/sounds/pomodoro-ring.wav' }).catch(() => {})
 }
 
 // The hooks that call these sit in register.tsx and pass `$` to module-level functions only:
@@ -156,8 +155,8 @@ async function onTick($: EngineInterface, c: Config) {
   })
   if (ended?.phase === 'work') {
     await countOne($, now)
-    alert($, `Pomodoro done — take a ${after.phase === 'long' ? c.long : c.short}-min break`)
-  } else if (ended) alert($, 'Break over — start your next pomodoro when ready')
+    alert($, `Pomodoro done — take a ${after.phase === 'long' ? c.long : c.short}-min break`, c.ring)
+  } else if (ended) alert($, 'Break over — start your next pomodoro when ready', c.ring)
   else await update($, tick, n => n + 1)
   await syncTicker($, c)
 }

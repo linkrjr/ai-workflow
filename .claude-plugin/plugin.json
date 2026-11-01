@@ -45,6 +45,12 @@
       "description": "Offer the /pomodoro timer. Off: no /pomodoro command and no Pomodoro band.",
       "default": true
     },
+    "pomodoroRing": {
+      "type": "boolean",
+      "title": "Pomodoro · Ring",
+      "description": "Play a ring when a pomodoro or a break ends. Off: the toast only. Applies from the next phase end.",
+      "default": true
+    },
     "pomodoroWorkMinutes": {
       "type": "number",
       "title": "Pomodoro · Work minutes",
