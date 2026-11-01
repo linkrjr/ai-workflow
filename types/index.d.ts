@@ -43,8 +43,21 @@ export type Ask = {
 
 export type LogLine = { at: number; who: string; text: string; isError: boolean }
 
+// The session's Pomodoro timer. `count` is today's completed pomodoros.
+export type Pomodoro = {
+  phase: 'idle' | 'work' | 'paused' | 'short' | 'long' | 'waiting'
+  // the pomodoro running or just done, of `total` in the cycle it started in
+  position: number
+  total: number
+  // a running phase: when it reaches 00:00 (ms since epoch)
+  endsAt?: number
+  // a paused pomodoro: the ms it has left
+  leftMs?: number
+  count: number
+}
+
 declare module 'claude-code' {
   interface PluginState {
-    'ai-workflow': { subagents: Subagent[]; log: LogLine[]; leader: Leader; tick: number; asks: Ask[]; isLogOpen: boolean; isPaneOpen: boolean }
+    'ai-workflow': { subagents: Subagent[]; log: LogLine[]; leader: Leader; tick: number; asks: Ask[]; isLogOpen: boolean; isPaneOpen: boolean; pomodoro: Pomodoro; pomodoroTick: number }
   }
 }

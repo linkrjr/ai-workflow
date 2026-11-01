@@ -5,6 +5,7 @@ import type { Ask, Leader, LogLine, Subagent } from '../types'
 
 import { AGENT_ICONS, AGENT_ICON_SIZE, TEAM_ICON, TEAM_ICON_SIZE } from './icons'
 import type { Icon } from './icons'
+import { closePomodoro, openPomodoro, pomodoroBand, pomodoroConfig, runPomodoro } from './pomodoro'
 
 const PANE = 'agent-teams'
 const subagents = atom({ plugin: 'ai-workflow', key: 'subagents' } as const, [] as Subagent[])
@@ -197,6 +198,8 @@ export const register: Register = (on, options) => {
   // Always On off: the pane opens only from the button above the prompt.
   const isAlwaysOn = options.alwaysOn !== false
   const isIconsOn = options.iconsOn !== false
+  // Undefined with the Pomodoro setting off: nothing of it is offered or drawn.
+  const pomodoro = pomodoroConfig(options)
 
   // The session's permission mode, as the last prompt saw it. In auto mode the classifier
   // answers asks, so the pane stays out of them; the normal dialog asks if it can't.
@@ -206,6 +209,9 @@ export const register: Register = (on, options) => {
   on('classic.UserPromptSubmit', ($, e, next) => ((mode = e.permission_mode), next(e)))
 
   on('session.start', async ($, e, next) => {
+    // With the setting off the stored phase is cleared, so turning it on again never
+    // finishes a pomodoro nobody saw.
+    await (pomodoro ? openPomodoro($, pomodoro) : closePomodoro($))
     // A reload (a changed setting) keeps the engine's panes: read whether ours is up.
     await update($, isPaneOpen, () => false)
     if (isAlwaysOn) void openPane($)
@@ -358,6 +364,25 @@ export const register: Register = (on, options) => {
     const r = await next(e)
     if (e.id === PANE) await update($, isPaneOpen, () => false)
     return r
+  })
+
+  on('session.end', async ($, e, next) => {
+    await closePomodoro($)
+    return next(e)
+  })
+
+  on('command.run', { command: 'pomodoro' }, async $ => {
+    if (pomodoro) await runPomodoro($, pomodoro)
+    return {}
+  })
+
+  // The Pomodoro row, below the agent teams band: that hook answers with its own tree and no
+  // `next` for its open button and asks, so this one is registered first, stands above it and
+  // puts what it returns first.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const above = await next(e)
+    const row = pomodoro && !e.props.hasSurvey ? await pomodoroBand($, e, above, pomodoro) : undefined
+    return row ?? above
   })
 
   // The first answerable ask, above the prompt too: a bare 1 or 2 in an empty prompt answers it.
