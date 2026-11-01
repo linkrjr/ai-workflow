@@ -42,10 +42,11 @@ export const pomodoroConfig = (options: Record<string, unknown>): Config | undef
         cycle: whole(options.pomodoroPerCycle, 2, 8, 4),
       }
 
-// The toast for a phase's end.
-// ponytail: toast only for now; the ring sound joins here (T3)
+// The toast and the ring for a phase's end. The ring is not awaited, and a clip that can't
+// play (no player, no audio device) is dropped: the toast and the timer go on.
 function alert($: EngineInterface, text: string) {
   $.ui.toast(text)
+  $.audio.play({ asset: 'assets/sounds/pomodoro-ring.wav' }).catch(() => {})
 }
 
 // The hooks that call these sit in register.tsx and pass `$` to module-level functions only:
