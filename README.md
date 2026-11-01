@@ -6,13 +6,13 @@
 
 **Owner:** Ronaldo Gomes
 **Review cadence:** after every agent or skill change
-**Last reviewed:** 2026-10
+**Last reviewed:** 2026-11
 
 ---
 
 ## Codebase Purpose
 
-This repo is a Claude Code plugin, `ai-workflow` (`.claude-plugin/plugin.json`), and the marketplace that hosts it (`.claude-plugin/marketplace.json`) — the repo root is the plugin root, same layout as `mattpocock/skills`. It's meant to be published: installed by adding this GitHub repository as a marketplace (`plugin.json`'s `homepage`/`repository` fields point at it), not just run locally out of a clone. It exposes two slash commands that together turn a feature idea into shipped, reviewed, documented code: `/workshop` interviews the user into an approved spec, and `/orchestrator` runs that spec through a lead-and-subagents pipeline (design, implementation, mandatory review, documentation). It produces no runtime service — its "output" is code changes made elsewhere in whatever repo it's invoked in, plus the spec and coordination files it writes under `docs/specs/` and `tmp/team/`.
+This repo is a Claude Code plugin, `ai-workflow` (`.claude-plugin/plugin.json`), and the marketplace that hosts it (`.claude-plugin/marketplace.json`) — the repo root is the plugin root, same layout as `mattpocock/skills`. It's meant to be published: installed by adding this GitHub repository as a marketplace (`plugin.json`'s `homepage`/`repository` fields point at it), not just run locally out of a clone. It exposes two slash commands that together turn a feature idea into shipped, reviewed, documented code: `/workshop` interviews the user into an approved spec, and `/orchestrator` runs that spec through a lead-and-subagents pipeline (design, implementation, mandatory review, documentation). It also has a third, `/pomodoro`, a timer that is separate from that pipeline (see [Pomodoro timer](#pomodoro-timer)). It produces no runtime service — its "output" is code changes made elsewhere in whatever repo it's invoked in, plus the spec and coordination files it writes under `docs/specs/` and `tmp/team/`.
 
 ---
 
@@ -48,6 +48,62 @@ The codebase has no application layers in the traditional sense — it is a set 
 | `qa-tester` agent | Mandatory, read-only functional gate — runs the project locally and exercises every API/UI/CLI surface, runs alongside `code-reviewer`; one instance at a time, working through a queue of PRs | `agents/qa-tester.md` |
 | `writer` agent | Final documentation pass, after both review and QA are clean | `agents/writer.md` |
 | Agent teams pane | Opens a right pane on session start: the leader's model, and one box per subagent the leader starts (status, simulated progress, tokens, estimated cost, effort). Costs use a hard-coded price table. Permission asks that need the person (none in auto mode, where the classifier decides) show in it with Proceed / Cancel (click, or type 1 / 2 in an empty prompt), which answer the ask; unanswered for 10 minutes, or with the pane off screen, the normal permission prompt asks instead. Two settings in `/config` (the plugin's `userConfig`): **Always On** (default on; off, the pane opens only from a `▸ agent teams` button above the prompt) and **Icons On** (default on; off hides the agent icons) | `hooks/register.tsx` |
+| Pomodoro timer | `/pomodoro` and its band above the prompt (one row, below the agent teams rows): the phase timing, the alerts and today's shared count. Six `/config` settings. See [Pomodoro timer](#pomodoro-timer) | `hooks/pomodoro.tsx`, wired from `hooks/register.tsx` |
+
+---
+
+## Pomodoro timer
+
+`/pomodoro` runs a Pomodoro timer above the prompt. The pipeline above does not use it.
+
+**Commands.** `/pomodoro` starts a pomodoro when the timer is idle or waiting. During a pomodoro or a break it only toasts the status, e.g. `Pomodoro 2/4 — 18:42 left`, and changes nothing else.
+
+**Band.** One row above the prompt, below any agent teams rows. It is hidden until the first `/pomodoro` in a session, and again after Stop.
+
+| State | Band text | Buttons |
+|---|---|---|
+| Pomodoro | `🍅 Pomodoro 2/4 · 18:42 · today ×3` | Pause, Stop |
+| Paused | `🍅 Paused 2/4 · 18:42 · today ×3` | Resume, Stop |
+| Short break | `☕ Short break · 03:12 · today ×3` | Skip, Stop |
+| Long break | `☕ Long break · 12:40 · today ×4` | Skip, Stop |
+| Waiting | `🍅 Break over · next: pomodoro 3/4 · today ×3` | Start pomodoro, Stop |
+
+`[Reset count]` also shows in the row while today's count file is corrupt (see **Today's count** below).
+
+Flow: `/pomodoro` → pomodoro n/N → at 00:00 the count goes up by one and a break starts by itself (long when n = N, otherwise short) → at 00:00 the band waits → `Start pomodoro` or `/pomodoro`.
+
+- Pause freezes the countdown; a paused pomodoro still counts once it is resumed and finishes.
+- Skip ends a break at once, silently, and goes to waiting. Only breaks have Skip.
+- Stop cancels the current phase silently, hides the band and resets the cycle to 1. A stopped pomodoro is not counted.
+
+**Settings.** Six settings in `/config`, under the plugin's `userConfig`:
+
+| Setting | Default | Range |
+|---|---|---|
+| Pomodoro · On | on | on / off |
+| Pomodoro · Ring | on | on / off |
+| Pomodoro · Work minutes | 25 | 1–120 |
+| Pomodoro · Short break minutes | 5 | 1–120 |
+| Pomodoro · Long break minutes | 15 | 1–120 |
+| Pomodoro · Pomodoros per cycle | 4 | 2–8 |
+
+With Pomodoro · On off, there is no `/pomodoro` and no band. A value that is missing, not a whole number, or out of range uses its default. A change applies from the next phase that starts; the ring setting applies from the next phase end.
+
+**Alerts.** A pomodoro end shows `Pomodoro done — take a <n>-min break` and a break end shows `Break over — start your next pomodoro when ready`. Both play the ring unless Pomodoro · Ring is off. Skip, Pause, Resume and Stop make no sound and show no toast.
+
+The ring is `assets/sounds/pomodoro-ring.wav`, a two-tone bell synthesized by `assets/sounds/make-ring.ts`. Regenerate it with `bun assets/sounds/make-ring.ts`. The engine plays it with `afplay`, so it is audible on macOS only; on Linux or Windows nothing plays and the toast still shows.
+
+**Today's count.** Shared by every session on the machine. It is kept in the engine's cross-session store under the key `pomodoroDay` as `{ date, count }`, in a JSON file named `ai-workflow_…` in the `plugins/store` folder. A pomodoro counts on the local date it finishes. A stored date that isn't today reads as 0, so the count resets at local midnight. It survives restarting Claude Code.
+
+If the count file is corrupt, a toast says so once per session and the band shows `[Reset count]`. Clicking it rewrites only that file as an empty store, so the band shows `today ×0`. The reset acts only if the file is still corrupt on a fresh read and the file is this plugin's own store file. Otherwise it toasts the path to delete by hand.
+
+**Session scope.** The timer and the cycle position belong to one session. Closing the session (or `/clear`) ends the timer, and a pomodoro still running then is not counted.
+
+**Known limits (accepted)**
+- **Reset count folder check is loose by one character.** The own-file check requires the folder to end in `plugins/store` with no leading `/`, so a folder such as `evilplugins/store` also passes. In practice only a file named `ai-workflow_*.json` in a folder named `store` could match, and the engine never names one. Fix: `endsWith('/plugins/store')`.
+- **Windows paths.** The same check rejects backslash paths, so on Windows Reset count never writes and shows the delete-by-hand toast instead.
+- **Two sessions finishing at the same instant** can lose one count; the store has no atomic update.
+- **Once per session** for the corrupt-file toast means once per module load. Changing a setting reloads the module and can show it once more.
 
 ---
 
@@ -126,6 +182,7 @@ A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/worksh
 | "Which agent owns which layer?" | each agent's frontmatter `description:` line |
 | "What does the plugin declare itself as, and how is it installed locally?" | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` |
 | "What does a spec actually look like before I run `/orchestrator`?" | `examples/todo-reminders-spec.md` |
+| "How does `/pomodoro` work, and where is its state?" | `hooks/pomodoro.tsx` (state, transitions, band); its hooks are wired in `hooks/register.tsx` |
 
 ---
 
@@ -170,6 +227,14 @@ A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/worksh
 **Rule:** step "1. Prepare" instructs whichever engineer touches `tmp/team/` first to add it to `.gitignore` "before doing anything else" if it isn't already there.
 **Why:** the handoff, design doc, and review/QA-round files are per-run scratch/coordination state, not product source.
 **What breaks:** skipping this lets scratch coordination files get committed into whatever repo the pipeline is running against.
+
+---
+
+**The hooks module is `hooks/register.tsx` only, and its hooks pass `$` to module-level functions**
+
+**Rule:** `.claude-plugin/plugin.json` and `hooks/hooks.json` declare one hooks module. The hooks that call into `hooks/pomodoro.tsx` sit in `register.tsx` and pass `$` (and `on`) only to module-level functions, never to anything else.
+**Why:** `claude plugin validate` refuses a second `modules` entry, and the engine reads a hooks module's source and refuses `$` or `on` handed to anything else.
+**What breaks:** `claude plugin validate` fails, or the engine refuses the module, and the plugin's hooks are not loaded.
 
 This list reflects the gotchas made explicit in `skills/orchestrator/SKILL.md` itself; it has not had a dedicated senior-engineer pass for gotchas beyond that (e.g. how `handoff.md` should be amended mid-task, or what happens if an engineer disagrees with a finding). Add entries here as they're found.
 

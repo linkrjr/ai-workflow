@@ -123,7 +123,6 @@ const formatDuration = (ms: number) => {
 }
 
 // "Edit → todo-app/app.js", "Bash → npm test"; values of secret-looking variables masked.
-// Values of secret-looking variables masked.
 const mask = (s: string) => s.replace(/\b(\w*(?:KEY|TOKEN|SECRET|PASSWORD|SESSION)\w*=)\S+/gi, '$1•••')
 
 const describeCall = (tool: string, input: Record<string, unknown>) => {
@@ -376,9 +375,9 @@ export const register: Register = (on, options) => {
     return {}
   })
 
-  // The Pomodoro row, below the agent teams band: that hook answers with its own tree and no
-  // `next` for its open button and asks, so this one is registered first, stands above it and
-  // puts what it returns first.
+  // The Pomodoro row goes below the agent teams band. That hook returns its own tree without
+  // calling `next` for its open button and asks, so this one is registered first: its `next`
+  // is that tree, and its row is drawn under it.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const above = await next(e)
     const row = pomodoro && !e.props.hasSurvey ? await pomodoroBand($, e, above, pomodoro) : undefined
