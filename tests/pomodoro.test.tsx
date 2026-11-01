@@ -10,7 +10,12 @@ const BAND = {
 const MIN = 60_000
 
 // The engine beneath the plugin: the clock, the command list, the toasts and an empty band.
-const boot = async ($: any, on: any, startAt = Date.parse('2026-11-01T09:00:00'), audioFails = false) => {
+// Extras go in one named options object, never positional: { startAt, audioFails }.
+const boot = async (
+  $: any,
+  on: any,
+  { startAt = Date.parse('2026-11-01T09:00:00'), audioFails = false }: { startAt?: number; audioFails?: boolean } = {},
+) => {
   const clock = mock.clock(on, { now: startAt })
   const registered: string[] = []
   const toasts: string[] = []
@@ -295,6 +300,8 @@ test('AC4, AC5: the ring plays with the toast at the end of a pomodoro and of a 
   await clock.advance(25 * MIN - 1000)
   expect(rings).toEqual([])
   await clock.advance(1000)
+  // The kit has no fs ($.fs is undefined under `claude plugin test`), so this only checks the path
+  // string; that assets/sounds/pomodoro-ring.wav exists on disk is not testable here.
   expect(rings).toEqual(['assets/sounds/pomodoro-ring.wav'])
   await clock.advance(5 * MIN)
   expect(rings).toEqual(['assets/sounds/pomodoro-ring.wav', 'assets/sounds/pomodoro-ring.wav'])
@@ -315,7 +322,7 @@ test('AC8: Skip, Pause, Resume and Stop are silent', async ($, on) => {
 })
 
 test('AC4, AC5: when the ring cannot play the toast still shows and the timer goes on', async ($, on) => {
-  const { clock, toasts, rings } = await boot($, on, undefined, true)
+  const { clock, toasts, rings } = await boot($, on, { audioFails: true })
   const ui = await $.ui.mount(BAND)
   await run($)
   await clock.advance(25 * MIN)
