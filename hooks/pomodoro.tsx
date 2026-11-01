@@ -30,7 +30,7 @@ const upNext = (s: Pomodoro, cycle: number) => {
 // The lengths in minutes, read once per load: a changed setting reloads the module, and a
 // phase already running keeps its stored end, so a new length applies from the next phase.
 // Undefined with the setting off.
-export type Config = { work: number; short: number; long: number; cycle: number }
+export type Config = { work: number; short: number; long: number; cycle: number; ring: boolean }
 
 export const pomodoroConfig = (options: Record<string, unknown>): Config | undefined =>
   options.pomodoroOn === false
@@ -40,13 +40,14 @@ export const pomodoroConfig = (options: Record<string, unknown>): Config | undef
         short: whole(options.pomodoroShortBreakMinutes, 1, 120, 5),
         long: whole(options.pomodoroLongBreakMinutes, 1, 120, 15),
         cycle: whole(options.pomodoroPerCycle, 2, 8, 4),
+        ring: options.pomodoroRing !== false,
       }
 
 // The toast and the ring for a phase's end. The ring is not awaited, and a clip that can't
-// play (no player, no audio device) is dropped: the toast and the timer go on.
-function alert($: EngineInterface, text: string) {
+// play (no player, no audio device) is dropped: the toast and the timer go on. Ring off: toast only.
+function alert($: EngineInterface, text: string, isRing: boolean) {
   $.ui.toast(text)
-  $.audio.play({ asset: 'assets/sounds/pomodoro-ring.wav' }).catch(() => {})
+  if (isRing) $.audio.play({ asset: 'assets/sounds/pomodoro-ring.wav' }).catch(() => {})
 }
 
 // The hooks that call these sit in register.tsx and pass `$` to module-level functions only:
@@ -72,8 +73,8 @@ async function onTick($: EngineInterface, c: Config) {
     const isLong = s.position >= s.total
     return { ...s, count: s.count + 1, phase: isLong ? 'long' : 'short', endsAt: now + (isLong ? c.long : c.short) * MINUTE }
   })
-  if (ended?.phase === 'work') alert($, `Pomodoro done — take a ${after.phase === 'long' ? c.long : c.short}-min break`)
-  else if (ended) alert($, 'Break over — start your next pomodoro when ready')
+  if (ended?.phase === 'work') alert($, `Pomodoro done — take a ${after.phase === 'long' ? c.long : c.short}-min break`, c.ring)
+  else if (ended) alert($, 'Break over — start your next pomodoro when ready', c.ring)
   else await update($, tick, n => n + 1)
   if (!isRunning(after)) stopTicking()
 }

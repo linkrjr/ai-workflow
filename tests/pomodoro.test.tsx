@@ -333,3 +333,22 @@ test('AC4, AC5: when the ring cannot play the toast still shows and the timer go
   expect((await row(ui)).text).toContain('Break over')
   await ui.unmount()
 })
+
+test('AC16: with the ring off a phase end shows the toast and plays no sound', { options: { pomodoroRing: false } }, async ($, on) => {
+  const { clock, toasts, rings } = await boot($, on)
+  await run($)
+  await clock.advance(25 * MIN)
+  expect(toasts.at(-1)).toBe('Pomodoro done — take a 5-min break')
+  await clock.advance(5 * MIN)
+  expect(toasts.at(-1)).toBe('Break over — start your next pomodoro when ready')
+  expect(rings).toEqual([])
+})
+
+// NOT covered: "a change applies from the next phase end" — the kit cannot swap `options` mid-test (same limit as
+// the AC13 reload test); it holds because `ring` is read once per load into Config and the ticker keeps that `c`.
+test('AC16: with the ring explicitly on, a phase end plays the ring', { options: { pomodoroRing: true } }, async ($, on) => {
+  const { clock, rings } = await boot($, on)
+  await run($)
+  await clock.advance(25 * MIN)
+  expect(rings.length).toBe(1)
+})
