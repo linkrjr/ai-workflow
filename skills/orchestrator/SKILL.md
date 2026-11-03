@@ -19,6 +19,18 @@ Idle agents still burn tokens while they wait.
 - Every other agent (ticket-reviewer, designer, writer) is stopped the moment its report is captured.
 - A fresh agent loses nothing: `tmp/team/handoff.md` and the task doc carry all the context it needs.
 
+## Usage limit: pause at 98%, resume on reset
+Check the plan's usage with the `mcp__ai-workflow__usage` tool (this plugin's mod) every time you wake: at the start of the run, on every agent report, and before every spawn or SendMessage. It returns each rate-limit window (`five_hour`, `seven_day`, ...) with `percentUsed` and `resetsAt`. If the tool isn't there (or returns no windows), say so once and carry on without the check.
+
+When any window is at `percentUsed` 98 or more, pause the whole run:
+1. Stop every running agent with `TaskStop`. Their uncommitted work stays in their worktrees.
+2. In the handoff, append `— paused` to each task line whose engineer you stopped mid-task or mid-fix, put each PR whose review or QA you stopped back at the front of its queue, and add a line `Paused until: <resetsAt of the fullest window>`.
+3. Schedule the restart with `CronCreate` (load it with ToolSearch if it is deferred), `recurring: false`, pinned to that reset time plus 5 minutes in local time (convert with `date`), prompt `/orchestrator <spec path>`. With no `resetsAt`, schedule it an hour from now. The job lives in this session only: tell the user to leave the session open.
+4. Set the pill to `Paused` and tell the user the window, its percent and the restart time.
+5. Call the `mcp__ai-workflow__compact` tool with `instructions`: "Orchestrator run for <spec path>, paused until <reset time>; tmp/team/handoff.md holds all state." It compacts the conversation once your turn ends, so the resumed turn re-caches a short summary instead of the whole run (the prompt cache will have expired by then). Without the tool, skip this step. Then end your turn. Start nothing else.
+
+On a run that finds a `Paused until:` line in an existing `tmp/team/handoff.md`, you are resuming: check usage first (still at 98% or more → schedule again as above and stop). Otherwise remove the line and go straight to section 4, without rewriting the handoff or refiling tasks. For each `— paused` task, drop the marker and spawn a fresh engineer of its role with the same name and worktree, briefed: "... Resume task <task ID> (or: Fix PR #<n>): your worktree has the work in progress." Then hand out the review and QA queues as in section 5.
+
 ## Progress bar and pill (only when `CMUX_WORKSPACE_ID` is set)
 The workspace card has one progress bar, and every subagent shares your workspace, so you alone own it and it shows the whole run, never one agent. Never tell a subagent to set it or the pill. Update it with `cmux set-progress <p> --label "<label>"` (see the `cmux` skill) at the end of each section below and every time you change a task's status in the handoff. Ignore any error from it or the pill — they never block the run.
 
@@ -28,6 +40,7 @@ Next to the bar, keep one pill naming the phase the run is in: `cmux set-status 
 - `Waiting on you` (whenever you ask the user a question) — icon `questionmark.circle`, color `#ff3b30`; set the previous phase back once they answer
 - `Documenting` — icon `pencil`, color `#4C8DFF`
 - `Done` (section 7) — icon `checkmark.circle`, color `#34c759`
+- `Paused` (usage limit, see "Usage limit" above) — icon `pause.circle`, color `#8e8e93`
 - `Stopped` (the run stops early, e.g. ticket-reviewer can't reproduce) — icon `xmark.circle`, color `#8e8e93`
 
 When the whole run is done (section 7, right after you set `Done`), send one notification: `cmux notify --title "Orchestrator done" --subtitle "<spec slug>" --body "<n> tasks merged across <n> PRs, review and QA clean"`. Send no other notifications.
@@ -148,12 +161,12 @@ You do this yourself: subagents can't reach the user's MCP login.
 6. If the upload fails, tell the user the error and ask "Retry" / "Skip Figma". A failed upload never blocks the rest of the pipeline.
 
 ## 4. Implement
-1. A task is unblocked when its status is `todo` and every task in its `depends on:` is `merged`. If a dependency is `approved` but its engineer is stopped or busy, merge that PR yourself (`gh pr merge <PR> --squash`, then `git pull --ff-only` in the main worktree) and set it to `merged`.
+1. A task is unblocked when its status is `todo` and every task in its `depends on:` is `merged`. You merge every PR (section 5, step 6); engineers never do.
 2. Start one engineer per unblocked task, all in a single message so they run in parallel — `backend-engineer` for backend tasks, `frontend-engineer` for frontend tasks (Agent tool, `subagent_type` = the agent name). Give each a unique `name` (`be-1`, `be-2`, `fe-1`, ...). Never start more engineers than there are unblocked tasks.
 3. Brief: "Your name: <name>. Main worktree: <path>. Your worktree: <main worktree parent>/<repo name>.worktrees/<name>. Base branch: <base>. Read <main worktree>/tmp/team/handoff.md first. Your task: <task ID>." Set the task's `engineer:` to that name and its status to `in-progress` (and the intent file's status, when using intent files; for Linear the ticket is already "in progress").
 4. When an engineer submits a PR, check its task line now has `PR: #<n>`, set the status to `in-review` (intent file too), and queue it for review and QA (section 5). Then give that engineer its next work with SendMessage, in this order:
    - a PR of its own with `changes-requested` → "Fix PR #<n>: <findings file paths>."
-   - otherwise an unblocked task → "Next task: <task ID>." (it merges its approved PRs and updates its worktree first, by its own rules)
+   - otherwise an unblocked task → "Next task: <task ID>." (it updates its worktree from the base first, by its own rules)
    - otherwise nothing → stop it with `TaskStop`.
 5. When a task unblocks (a dependency merged) and no running engineer of that role is free, spawn a fresh one for it as in steps 2-3.
 6. A PR with `changes-requested` whose engineer was stopped: spawn a fresh engineer of that role with the same name and worktree, briefed: "... Fix PR #<n> for task <task ID>: <findings file paths>."
@@ -167,7 +180,10 @@ There is exactly one `code-reviewer` and one `qa-tester` at a time, each with it
    - `qa-tester`: "Read <main worktree>/tmp/team/handoff.md. QA test PR #<n> for task <task ID> end to end. This is round <N>. Write your result to <main worktree>/tmp/team/qa-pr-<n>-round-<N>.md."
 4. Each report covers one PR and comes back to you as soon as that PR is done. Act on it (steps 5-6), then hand that agent its next queue entry right away. If its queue is empty, stop it with `TaskStop`; spawn it again when a new entry arrives.
 5. A report says FINDINGS → set the task to `changes-requested` and route the fix to the PR's engineer (section 4, steps 4 and 6). If that PR's round is still waiting in the other queue, take it off: the fix starts a new round anyway. When the fix is pushed, set the task back to `in-review` and queue round N + 1 in both queues. There is no round limit, but a loop that is not converging goes to the user: from round 2 on, run `scripts/jev.sh loop-guard tmp/team/review-pr-<n>-round-<N-1>.md tmp/team/review-pr-<n>-round-<N>.md` (and the same for the `qa-pr-` files) before routing the fix. On `JEV VERDICT: STALLED`, ask the user before routing the fix, with the question tool: "Keep looping" (Recommended) / "Revise the task or spec" / "Stop this task", the Jev signals in the description. Route the fix only on "Keep looping". `PROGRESSING` or `UNAVAILABLE` changes nothing: route the fix as usual.
-6. Both reports for the same round say `VERDICT: CLEAN` → set the task to `approved`. The engineer merges it before its next task; if no engineer will (no tasks left for it), merge it yourself as in section 4, step 1. Set it to `merged` (intent file status `done`).
+6. Both reports for the same round say `VERDICT: CLEAN` → set the task to `approved` and merge it right away, from the main worktree:
+   1. `gh pr merge <n> --squash --delete-branch`. It deletes the remote branch, and the local one unless an engineer's worktree has it checked out (that engineer deletes it when it switches to its next task).
+   2. If the merge fails on a conflict, set the task to `changes-requested` and route "Fix PR #<n>: merge conflict with <base>, rebase and push." to its engineer as in step 5. The rebased push is a new round in both queues; a rebase is code the gates haven't seen.
+   3. `git pull --ff-only` in the main worktree, then set the task to `merged` (intent file status `done`). Tasks that depended on it may now be unblocked (section 4, step 5).
 
 ## 6. Document
 Only after every task in the handoff is `merged` (every engineer, code-reviewer, and qa-tester agent should already be stopped per the agent hygiene rule above — if any is still running, stop it first): run `git pull --ff-only` in the main worktree, then spawn `writer` alone, with: "Read tmp/team/handoff.md. Implementation is complete, reviewed clean, QA passed and merged. Update README/API docs/comments for the files changed since <base commit>."
@@ -180,7 +196,7 @@ Close out the tasks. With Linear: for each task line with a `linear:` identifier
 
 Clean up so that only the base branch is left, locally and on the remote. Run every command from the main worktree:
 1. Remove the engineers' worktrees and any QA worktree still left: `git worktree remove --force <path>` for each, then `git worktree prune`. `git worktree list` must show only the main worktree.
-2. For each PR in the handoff, get its branch and state: `gh pr view <n> --json headRefName,state`. If the state is `MERGED`, delete the branch on both sides: `git push origin --delete <branch>` (skip it if the remote branch is already gone) and `git branch -D <branch>`. `-D` is needed because squash merges leave the branch unmerged in git's eyes; the `MERGED` state is your proof that the work is in the base. Never delete the base branch.
+2. For each PR in the handoff, get its branch and state: `gh pr view <n> --json headRefName,state`. If the state is `MERGED`, delete whatever of the branch is still left on either side (section 5, step 6 already removed most): `git push origin --delete <branch>` (skip it if the remote branch is already gone) and `git branch -D <branch>`. `-D` is needed because squash merges leave the branch unmerged in git's eyes; the `MERGED` state is your proof that the work is in the base. Never delete the base branch.
 3. `git fetch --prune origin`, then check that `git branch --list 'task/*'` and `git ls-remote --heads origin 'task/*'` both print nothing. Any branch still listed is an orphan: if its PR is merged, delete it as in step 2; if it isn't (e.g. a task stopped after a stalled loop), leave it and name it in the report so the user decides.
 
 Then tell the user:

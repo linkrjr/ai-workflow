@@ -212,6 +212,17 @@ export const register: Register = (on, options) => {
     // With the setting off the stored phase is cleared, so turning it on again never
     // finishes a pomodoro nobody saw.
     await (pomodoro ? openPomodoro($, pomodoro) : closePomodoro($))
+    // The orchestrator reads the plan's limits through this to pause before one runs out.
+    await $.tool.register({
+      name: 'usage',
+      description: 'The plan rate-limit windows (five_hour, seven_day, ...): percent used and reset time.',
+    }).catch(err => $.ui.log(`ai-workflow: usage tool not registered: ${err}`))
+    // It pauses on a full window: compacting first makes the resumed turn re-cache a summary.
+    await $.tool.register({
+      name: 'compact',
+      description: 'Compact the conversation, as /compact does, once the current turn ends.',
+      inputSchema: { type: 'object', properties: { instructions: { type: 'string', description: 'What the summary must keep' } } },
+    }).catch(err => $.ui.log(`ai-workflow: compact tool not registered: ${err}`))
     // A reload (a changed setting) keeps the engine's panes: read whether ours is up.
     await update($, isPaneOpen, () => false)
     if (isAlwaysOn) void openPane($)
@@ -332,6 +343,19 @@ export const register: Register = (on, options) => {
       : { decision: 'deny', reason: 'The person cancelled this in the agent teams pane' }
   }).catch(($, e, next) => next(e)) // a panel bug must never change a verdict: the prompt asks
 
+  // Compaction is refused while a turn runs, so the tool only books it for the turn's end.
+  let compactAfterTurn: { instructions?: string } | undefined
+  on('tool.call', { tool: /^mcp__ai-workflow__compact$/ }, async (_, e) => {
+    const instructions = (e as { instructions?: unknown }).instructions
+    compactAfterTurn = typeof instructions === 'string' ? { instructions } : {}
+    return { result: [{ type: 'text', text: 'The conversation will be compacted when this turn ends.' }] }
+  })
+
+  on('tool.call', { tool: /^mcp__ai-workflow__usage$/ }, async $ => {
+    const { rateLimits } = await $.session.usage()
+    return { result: [{ type: 'text', text: JSON.stringify(rateLimits) }] }
+  })
+
   on('tool.call', async ($, e, next) => {
     // ponytail: an approved call stays listed until it finishes (a long Bash too); clear on
     // approval if an event for the person's answer turns up
@@ -349,6 +373,12 @@ export const register: Register = (on, options) => {
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
     if (!e.agentId) await update($, leader, (l): Leader => ({ ...l, status: 'idle' }))
+    if (!e.agentId && compactAfterTurn) {
+      const args = compactAfterTurn
+      compactAfterTurn = undefined
+      // ponytail: 1s after the turn so the engine is between turns; retry if it ever still rejects
+      $.clock.after(1000, () => void $.session.compact(args).catch(err => $.ui.log(`ai-workflow: compact failed: ${err}`)))
+    }
     const sub = (await read($, subagents)).find(a => a.id === e.agentId)
     if (sub) {
       const status = ENDED[e.reason] ?? 'completed'

@@ -82,11 +82,10 @@ The lead's brief gives your name, the main worktree, your worktree, the base bra
 Read only the task doc for the task you are about to work on: the intent file (`<main worktree>/<intent path>`) or the Linear issue (`scripts/linear.sh issue <ID>`, see the `linear` skill) named on its line in the handoff. Never open another task's intent file.
 
 Before starting a new task (not when fixing your own PR):
-1. Merge your approved PRs: for every handoff line with `engineer: <your name>` and `status: approved`, run `gh pr merge <PR> --squash` and set that line's status to `merged`. If a PR can't merge because of conflicts, rebase its branch on the base, resolve, push, set the status to `in-review` and report back to the lead instead of starting the new task: the change needs review again.
-2. Update from the main worktree: `git -C <main worktree> pull --ff-only` (retry if another engineer holds the git lock).
-3. Branch from the updated base: first task → `git -C <main worktree> worktree add <your worktree> -b task/<task-slug> <base>`; later tasks → in your worktree, `git switch -c task/<task-slug> <base>`.
+1. Update from the main worktree: `git -C <main worktree> pull --ff-only` (retry if another engineer holds the git lock). Never merge a PR yourself: the lead merges each one once review and QA are both clean.
+2. Branch from the updated base: first task → `git -C <main worktree> worktree add <your worktree> -b task/<task-slug> <base>`; later tasks → in your worktree, `git switch -c task/<task-slug> <base>`, then delete your previous task's local branch with `git branch -D <old branch>` if its handoff line says `merged`.
 
-Work only in your worktree. Fixing your own PR after review or QA findings: `git switch task/<task-slug>` in your worktree, read the findings files the lead names, fix, and push to the same PR. Never open a second PR for the same task.
+Work only in your worktree. Fixing your own PR after review or QA findings: `git switch task/<task-slug>` in your worktree, read the findings files the lead names, fix, and push to the same PR. A merge conflict the lead sends you is fixed the same way: rebase the branch on the base, resolve, and force-push (`--force-with-lease`). Never open a second PR for the same task.
 
 Submitting a task:
 1. Pass "Done means" below.

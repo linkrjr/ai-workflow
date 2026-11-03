@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 const PANE = {
   plugin: 'ai-workflow',
@@ -373,4 +373,31 @@ test('in auto mode an ask is left to the classifier: no permission box', async (
 
   expect(r.decision).toBe('ask')
   expect(writes).toEqual([])
+})
+
+test('the usage tool reports the plan limits', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const rateLimits = [{ kind: 'five_hour', percentUsed: 98.2, resetsAt: '2026-11-03T18:00:00Z' }]
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 0 }, rateLimits } }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const r = await $.tool.call({ tool: 'mcp__ai-workflow__usage' })
+  expect(JSON.parse((r.result as { text: string }[])[0]?.text ?? "")).toEqual(rateLimits)
+})
+
+test('the compact tool compacts once the main turn ends', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  const clock = mock.clock(on, { now: 0 })
+  const compacted: unknown[] = []
+  on('session.compact', (_, e) => (compacted.push(e.instructions), { skip: 'test' }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  await $.tool.call({ tool: 'mcp__ai-workflow__compact', instructions: 'keep the spec path' })
+  expect(compacted).toEqual([])
+  await $.turn.complete({ answer: 'paused', durationMs: 1, isAborted: false, turnId: 'x', reason: 'answer' })
+  await clock.advance(1000)
+  expect(compacted).toEqual(['keep the spec path'])
 })
