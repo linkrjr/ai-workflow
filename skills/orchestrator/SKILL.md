@@ -51,8 +51,9 @@ When the whole run is done (section 7, right after you set `Done`), send one not
 ## 1. Prepare
 1. Read the spec. If it has no "Acceptance criteria" section, stop and tell the user to run /workshop first.
    Then run `scripts/jev.sh spec-check < <spec path>` (the `jev` skill). It is advisory: if it prints `FLAG` lines (or `UNAVAILABLE`), carry on and mention the flags in your final report; never stop for them.
+   Then set up the codebase graph, before any other work — see "1c. Codebase graph" below.
 2. Check the spec's `Type:`. If it is `BUG` or `TICKET`, resolve reproduction before anything else in this section — see "1a. Verify reproduction" below. Do not start designer, backend-engineer, or frontend-engineer until that gate says `REPRODUCED`. A `FEATURE` or `TECH_DEBT` spec skips straight to step 3.
-3. Read enough of the codebase to know which layers change. Check; do not assume.
+3. Read enough of the codebase to know which layers change. Check; do not assume. With a graph, start from `graphify query "<what the spec changes>"` and `graphify affected "<symbol or file>"`, then read the files it points to.
 4. Check that PRs can be opened: `gh auth status` succeeds and `git remote get-url origin` points at GitHub. If not, tell the user what's missing and ask "Retry" / "Stop"; engineers can't submit work without it. When the only thing missing is the remote, also offer "Create a private GitHub repo", and on that answer run `gh repo create <repo name> --private --source . --push`, then check again. The engineers' local-only rules are about the app's runtime, not git, so a GitHub remote doesn't break them.
 5. Note the main worktree (`git rev-parse --show-toplevel`), the base branch (`git branch --show-current`) and the base commit (`git rev-parse HEAD`).
 6. Split the spec into tasks — see "1b. Split into tasks" below.
@@ -60,6 +61,7 @@ When the whole run is done (section 7, right after you set `Done`), send one not
    - Spec path, main worktree path, base branch and base commit
    - Spec type (FEATURE / BUG / TICKET / TECH_DEBT); if BUG or TICKET, link `tmp/team/ticket-review.md`
    - Tech stack, copied from the spec
+   - `Graph: <main worktree>/graphify-out/graph.json`, or `Graph: none` (from 1c)
    - Acceptance criteria, copied verbatim (AC1, AC2, ...)
    - Files and areas in scope; areas out of scope
    - Decisions already made
@@ -85,6 +87,15 @@ Make every task as small as it can be while still being worked, reviewed and mer
 - Each AC is covered by at least one task; a task may cover part of an AC.
 - Write down real dependencies only: a task depends on another when it needs that task's code merged first (e.g. a frontend task that calls a new endpoint depends on the endpoint task). Tasks without a dependency between them can run in parallel, so don't chain tasks that don't need it.
 - Specs scoped from an audit (they have a "Findings in scope" table): one task per finding, carrying its ID, `file:line` and recommendation into the task doc. Findings that touch the same file go in one task, so their PRs don't conflict.
+
+### 1c. Codebase graph (graphify)
+A graphify knowledge graph maps the codebase's files, symbols and how they connect. Every agent here starts cold and would otherwise re-read files to find its way; with the graph it asks `graphify query`, `explain`, `path` or `affected` instead and reads only what the answer points to. That saves tokens on every agent and catches callers a grep would miss.
+1. If the `graphify` command doesn't exist (`command -v graphify`), skip this section: the handoff says `Graph: none`.
+2. `graphify-out/graph.json` exists in the main worktree → use it. Refresh it first with `graphify update .` (code only, no LLM, seconds).
+3. It doesn't exist → ask the user before doing anything else: "Create a codebase graph" (Recommended) / "Skip". Explain why in the question: subagents start cold and re-explore the code on every task; a graph lets each one look up where things live, what calls what and what a change affects, so they read less and miss fewer callers. Say what it costs: a one-time build (structural for code; docs and other files use LLM extraction, so tokens), and a `graphify-out/` folder committed to the repo, so later runs and the rest of the team reuse it. On "Create", run the `graphify` skill on `.` with `--no-viz` and wait for it. On "Skip", the handoff says `Graph: none`.
+4. With a graph, add to every agent's brief: "Codebase graph: <main worktree>/graphify-out/graph.json. Before reading files to find your way, use `graphify query "<question>" --graph <that path>` (also `explain`, `path`, `affected`). It reflects the base branch, not your uncommitted changes." For `code-reviewer` and `qa-tester` add: "Run `graphify affected` on the symbols the PR changes to find callers and surfaces it may break."
+5. The graph is committed to the base branch. When step 2 or 3 changed `graphify-out/`, commit only that folder and push, before step 5 of section 1 notes the base commit, so every engineer's worktree branches from a base that has it: `git add graphify-out && git commit -m "graphify: update codebase graph" -- graphify-out && git push`. If the push is refused (e.g. a protected base branch), tell the user and keep the commit local; never force it.
+6. Keep it current: after every merge (section 5, step 6), run `graphify update .` in the main worktree and leave the change uncommitted; engineers never commit `graphify-out/`. Section 7 commits the final refresh once.
 
 ## 2. File the tasks
 Ask the user where to file the tasks: "Intent files" / "Linear". Record the answer as the handoff's `Task tracker`. Each task's doc is then either its intent file or its Linear issue, never both, and every agent reads only the doc of the task it is working on.
@@ -183,7 +194,7 @@ There is exactly one `code-reviewer` and one `qa-tester` at a time, each with it
 6. Both reports for the same round say `VERDICT: CLEAN` → set the task to `approved` and merge it right away, from the main worktree:
    1. `gh pr merge <n> --squash --delete-branch`. It deletes the remote branch, and the local one unless an engineer's worktree has it checked out (that engineer deletes it when it switches to its next task).
    2. If the merge fails on a conflict, set the task to `changes-requested` and route "Fix PR #<n>: merge conflict with <base>, rebase and push." to its engineer as in step 5. The rebased push is a new round in both queues; a rebase is code the gates haven't seen.
-   3. `git pull --ff-only` in the main worktree, then set the task to `merged` (intent file status `done`). Tasks that depended on it may now be unblocked (section 4, step 5).
+   3. `git pull --ff-only` in the main worktree (and `graphify update .` when there is a graph), then set the task to `merged` (intent file status `done`). Tasks that depended on it may now be unblocked (section 4, step 5).
 
 ## 6. Document
 Only after every task in the handoff is `merged` (every engineer, code-reviewer, and qa-tester agent should already be stopped per the agent hygiene rule above — if any is still running, stop it first): run `git pull --ff-only` in the main worktree, then spawn `writer` alone, with: "Read tmp/team/handoff.md. Implementation is complete, reviewed clean, QA passed and merged. Update README/API docs/comments for the files changed since <base commit>."
@@ -198,6 +209,8 @@ Clean up so that only the base branch is left, locally and on the remote. Run ev
 1. Remove the engineers' worktrees and any QA worktree still left: `git worktree remove --force <path>` for each, then `git worktree prune`. `git worktree list` must show only the main worktree.
 2. For each PR in the handoff, get its branch and state: `gh pr view <n> --json headRefName,state`. If the state is `MERGED`, delete whatever of the branch is still left on either side (section 5, step 6 already removed most): `git push origin --delete <branch>` (skip it if the remote branch is already gone) and `git branch -D <branch>`. `-D` is needed because squash merges leave the branch unmerged in git's eyes; the `MERGED` state is your proof that the work is in the base. Never delete the base branch.
 3. `git fetch --prune origin`, then check that `git branch --list 'task/*'` and `git ls-remote --heads origin 'task/*'` both print nothing. Any branch still listed is an orphan: if its PR is merged, delete it as in step 2; if it isn't (e.g. a task stopped after a stalled loop), leave it and name it in the report so the user decides.
+
+With a graph, commit its final refresh to the base branch as in 1c step 5, after the branch cleanup and before the writer's uncommitted doc changes are touched (the commit takes only `graphify-out/`).
 
 Then tell the user:
 - What changed (files, one line each)
