@@ -2,3 +2,4 @@
 .omc/
 tmp/team/
 .claude-plugin/types/
+.conductor/settings.local.toml
