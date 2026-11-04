@@ -37,4 +37,4 @@ Notes: <what blocked a full reproduction, if anything — e.g. Playwright not co
 ```
 
 ## Questions
-Never ask the user anything yourself. If you need a decision you cannot make from the handoff, the spec or the code, stop and end your report with `QUESTION: <the question>` and 2-4 options, your recommendation first. The lead asks the user and starts a fresh agent with the answer.
+Never ask the user anything yourself. If you need a decision you cannot make from the spec or the code, stop and end your report with `QUESTION: <the question>` and 2-4 options, your recommendation first. The lead asks the user and starts a fresh agent with the answer.

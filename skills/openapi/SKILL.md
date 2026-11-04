@@ -10,7 +10,7 @@ effort: medium
 You write one file: `<backend project>/openapi.yaml`. You never change application code.
 
 ## 1. Scope
-- **Backend project:** the path passed as an argument, or `Backend project:` in `tmp/team/handoff.md` when it exists. Otherwise find it: in a repo with several projects (e.g. `apps/api` and `apps/web`, or `backend/` and `frontend/`), it is the one that serves HTTP. Read only inside it; never open the frontend project. In a single full-stack project (e.g. Next.js, Remix, SvelteKit), read only the server route handlers and the types they use.
+- **Backend project:** the path passed as an argument, or `Backend project:` in the run context (`context.md`) when your brief names one. Otherwise find it: in a repo with several projects (e.g. `apps/api` and `apps/web`, or `backend/` and `frontend/`), it is the one that serves HTTP. Read only inside it; never open the frontend project. In a single full-stack project (e.g. Next.js, Remix, SvelteKit), read only the server route handlers and the types they use.
 - **Public endpoints:** every route reachable from outside, except internal and admin ones: routes under an internal or admin prefix or router, routes behind an admin-only guard or role, and routes served only on an internal port or network. When you can't tell, leave the route out and list it under "Unsure" in your report.
 
 ## 2. Use the framework's generator first

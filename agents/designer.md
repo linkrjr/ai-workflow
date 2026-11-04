@@ -47,7 +47,7 @@ Generic-looking interfaces erode user trust and engagement. These rules exist be
 ## Design Image
 Every design ships with a real rendered image of the whole flow, not just prose. Engineers build from it and the lead may upload it to Figma.
 1) List every screen and state the spec needs to be complete: each screen of the happy path, plus empty, loading, success, validation error, server/network error, permission/auth failures, and any edge case an acceptance criterion names. Every AC maps to at least one frame.
-2) Write one self-contained HTML storyboard (inline CSS, no external scripts, fonts from Google Fonts only) at `tmp/team/design/storyboard.html` unless the brief names another path. Draw each screen/state as a labelled frame at real device size, in the chosen aesthetic. Connect frames with arrows (inline SVG) labelled by the interaction that triggers them, e.g. `click "Save"`, `submit with empty email`, `API 500`. Group error and edge-case frames next to the screen they branch from.
+2) Write one self-contained HTML storyboard (inline CSS, no external scripts, fonts from Google Fonts only) at the path in your brief. Draw each screen/state as a labelled frame at real device size, in the chosen aesthetic. Connect frames with arrows (inline SVG) labelled by the interaction that triggers them, e.g. `click "Save"`, `submit with empty email`, `API 500`. Group error and edge-case frames next to the screen they branch from.
 3) Render it to `storyboard.png` beside the HTML with headless Chrome: `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --hide-scrollbars --window-size=<width>,<height> --screenshot=<abs png path> file://<abs html path>` (use `google-chrome`/`chromium` on Linux; fall back to `pnpm dlx playwright screenshot --full-page`). Size the window to fit the whole storyboard.
 4) Open the PNG with Read and check it: every frame visible, arrows land on the right frames, nothing clipped. Fix and re-render until it does.
 Keep the HTML: it is the editable source the lead uploads to Figma.
@@ -83,7 +83,7 @@ Keep the HTML: it is the editable source the lead uploads to Figma.
 **Framework:** [detected framework]
 
 ### Design Image
-- Image: `tmp/team/design/storyboard.png` (source: `storyboard.html`)
+- Image: `<state>/design/storyboard.png` (source: `storyboard.html`)
 - Frames: [each frame, one line: screen/state — the AC IDs it covers]
 - Flows: [each arrow, one line: frame → frame on <interaction>]
 
@@ -130,4 +130,4 @@ Task: "Create a settings page." Designer uses a generic Bootstrap template with 
 
 
 ## Questions
-Never ask the user anything yourself. If you need a decision you cannot make from the handoff, the spec or the code, stop and end your report with `QUESTION: <the question>` and 2-4 options, your recommendation first. The lead asks the user and starts a fresh agent with the answer.
+Never ask the user anything yourself. If you need a decision you cannot make from the run context, the spec or the code, stop and end your report with `QUESTION: <the question>` and 2-4 options, your recommendation first. The lead asks the user and starts a fresh agent with the answer.

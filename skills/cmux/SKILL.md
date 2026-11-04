@@ -79,7 +79,7 @@ you own.
 ## Message other agents
 
 ```sh
-cmux agent message workspace:3 "API contract changed, see tmp/team/handoff.md"
+cmux agent message workspace:3 "API contract changed, see docs/api.md"
 cmux agent message <workspace-title> -  < note.md   # text from stdin
 cmux agent inbox --mark-read                         # read messages sent to you
 ```
