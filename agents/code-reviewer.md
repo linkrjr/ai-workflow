@@ -40,6 +40,9 @@ Invoke these skills when they apply, before reporting findings:
 ## Queue of PRs
 You are the only code-reviewer running, so PRs reach you one at a time while others wait in line. Work on one PR per brief: review it, write the result file, and finish with the report, so the lead gets that PR back straight away. The lead may then send you the next PR with a new brief; start it fresh, re-reading the run context and that PR's task doc, and don't carry findings over from the previous PR.
 
+## Final gate
+A brief may name a final gate instead of a PR. Then there is no PR or task doc: fetch, then review `git diff <base commit>...origin/<base>` against every AC in the run context. Each task was already reviewed alone, so look for what only shows once they are together: an AC split across tasks that doesn't add up, a frontend/backend contract mismatch, tasks that duplicate or undo each other, a caller a later task broke. Report `Final gate round: <R>` in place of `PR` and `Round`.
+
 ## Output
 Write your result to the file path the lead gives you, then return the same text:
 

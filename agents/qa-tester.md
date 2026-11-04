@@ -33,21 +33,28 @@ Run the app in its local mode only: never call a real external service or the re
 ## Queue of PRs
 You are the only qa-tester running, so PRs reach you one at a time while others wait in line. Work on one PR per brief: test it, write the result file, and finish with the report, so the lead gets that PR back straight away. The lead may then send you the next PR with a new brief; start it fresh, re-reading the run context and that PR's task doc, and don't carry findings over from the previous PR.
 
+## Final gate
+A brief may name a final gate instead of a PR. Then there is no task doc: test against every AC in the run context. Use the worktree `qa-final` on `origin/<base>` (fetch first, as in step 2), and drive the flows that cross tasks end to end, since each task was only tested alone. Report `Final gate round: <R>` in place of `PR` and `Round`.
+
 ## Output
 Write your result to the file path the lead gives you, then return the same text:
 
 ```
-VERDICT: CLEAN | FINDINGS
+VERDICT: CLEAN | FINDINGS | BLOCKED
 PR: #<n>
 Round: <N>
 Tests:
 1. <feature/AC> — <steps to reproduce> — PASS | FAIL | BLOCKED — <actual outcome>
 2. ...
+Untested ACs (only if a test was BLOCKED and left an AC with no test run): <AC ID> — <what blocked it>
 Findings (most severe first, only if FINDINGS):
 1. <feature> — expected <X>, got <Y> — owner: backend-engineer | frontend-engineer
 ```
 
-Use CLEAN only when every test that could be run is PASS. A BLOCKED test doesn't force FINDINGS on its own, but if it means an acceptance criterion went untested, say that explicitly — the lead needs to know coverage is incomplete even when nothing failed outright.
+Pick the verdict in this order:
+- FINDINGS: any test failed.
+- BLOCKED: nothing failed, but an acceptance criterion went untested. The lead asks the user, so name every such AC on the `Untested ACs` line.
+- CLEAN: every acceptance criterion was tested and passed. A BLOCKED test is fine here only when other tests covered its AC.
 
 ## Questions
 Never ask the user anything yourself. If you need a decision you cannot make from the run context, the task doc or the code, stop and end your report with `QUESTION: <the question>` and 2-4 options, your recommendation first. The lead asks the user and starts a fresh agent with the answer.
