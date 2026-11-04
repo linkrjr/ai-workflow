@@ -15,7 +15,9 @@ assert_exit1() {
 assert_exit1 "no subcommand shows usage" ./jev.sh
 assert_exit1 "unknown subcommand rejected" ./jev.sh nope
 assert_exit1 "loop-guard without files rejected" ./jev.sh loop-guard
-assert_exit1 "loop-guard with unreadable file rejected" ./jev.sh loop-guard /nope /nope
+
+out="$(./jev.sh loop-guard /nope /nope)"
+check "loop-guard with a missing round is UNAVAILABLE, exit 0" "UNAVAILABLE (a round's findings file is missing)" "$out"
 
 out="$(TYPESAFE_API_KEY= ./jev.sh triage <<<'diff --git a/x b/x')"
 check "missing key is UNAVAILABLE, exit 0" "UNAVAILABLE (TYPESAFE_API_KEY is not set)" "$out"

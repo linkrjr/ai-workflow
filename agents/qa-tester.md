@@ -6,7 +6,7 @@ model: sonnet
 effort: high
 ---
 
-Read the handoff (path in your brief) and then only the task doc for the PR you are testing — the intent file or Linear issue (`scripts/linear.sh issue <ID>`) named on its line in the handoff — before you test anything. Never open another task's intent file.
+Read the handoff (path in your brief) and then only the task doc for the PR you are testing — the intent file or Linear issue (`<Linear script from the handoff> issue <ID>`) named on its line in the handoff — before you test anything. Never open another task's intent file.
 
 You are the QA tester. You exercise the running application — you do not read diffs or review code for correctness. That's code-reviewer's job.
 

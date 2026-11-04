@@ -31,13 +31,18 @@ EOF
 }
 
 post() {
-  local query="$1" variables="$2"
-  jq -n --arg q "$query" --argjson v "$variables" '{query: $q, variables: $v}' \
+  local query="$1" variables="$2" resp
+  resp="$(jq -n --arg q "$query" --argjson v "$variables" '{query: $q, variables: $v}' \
     | curl -sS https://api.linear.app/graphql \
         -H "Authorization: ${LINEAR_API_KEY}" \
         -H "Content-Type: application/json" \
-        --data-binary @- \
-    | jq .
+        --data-binary @-)" || return 1
+  jq . <<< "$resp" || return 1
+  # Linear answers HTTP 200 with `errors` or `success: false` when a request fails.
+  if jq -e '(.errors // [] | length > 0) or ([.. | objects | .success? | select(. == false)] | length > 0)' <<< "$resp" >/dev/null; then
+    echo "error: Linear rejected the request" >&2
+    return 1
+  fi
 }
 
 find_team_id() {
@@ -75,12 +80,13 @@ ensure_label_id() {
 
 ensure_label_ids() {
   local team_id="$1" names_json="$2"
-  local name ids=()
+  local name id ids='[]'
   while IFS= read -r name; do
     [[ -z "$name" ]] && continue
-    ids+=("$(ensure_label_id "$team_id" "$name")")
+    id="$(ensure_label_id "$team_id" "$name")" || exit 1
+    ids="$(jq -c --arg id "$id" '. + [$id]' <<< "$ids")"
   done < <(jq -r '.[]' <<< "$names_json")
-  printf '%s\n' "${ids[@]}" | jq -R . | jq -s .
+  echo "$ids"
 }
 
 find_project_id() {

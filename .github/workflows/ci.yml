@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Script tests
+        run: |
+          bash skills/jev/scripts/test_jev.sh
+          bash skills/linear/scripts/test_linear.sh
+      - name: Prompts use no working-directory script paths
+        run: |
+          if grep -rnE '(^|[^/}])scripts/(jev|linear|test_)' skills agents; then
+            echo "Use \${CLAUDE_PLUGIN_ROOT} or \${CLAUDE_SKILL_DIR}; agents read the path from the handoff."
+            exit 1
+          fi
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Validate the plugin
+        run: claude plugin validate .
+      - name: Mod tests
+        run: claude plugin test

@@ -33,6 +33,20 @@ This plugin does not declare its external skill dependencies in `plugin.json` â€
 
 ---
 
+## Running the Tests
+
+There is no `package.json`, so `bun test` can't find the engine's test kit. Run these instead; CI (`.github/workflows/ci.yml`) runs all but the type check:
+
+```sh
+claude plugin validate .                     # manifests
+claude plugin test                           # tests/*.test.tsx, needs the engine's test kit
+bash skills/jev/scripts/test_jev.sh          # stubbed curl, no network
+bash skills/linear/scripts/test_linear.sh    # stubbed curl, no network
+bunx tsc --noEmit                            # local only: the engine's types in .claude-plugin/types/ are gitignored
+```
+
+---
+
 ## Execution Stack
 
 The codebase has no application layers in the traditional sense â€” it is a set of orchestration prompts (skills, user-invoked) and worker prompts (agents, spawned by `orchestrator`), listed in the order a run touches them:

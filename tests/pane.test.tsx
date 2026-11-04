@@ -69,6 +69,7 @@ test('the pane shows the leader and each subagent it started', async ($, on) => 
     agentId: 'a1',
   }));
 
+  // @ts-expect-error TS2589: the engine's tool.call types recurse too deep for tsc
   await $.tool.call({ tool: 'Bash', command: 'ls', agentId: 'a1' })
 
   for (const surface of ['terminal', 'desktop'] as const) {

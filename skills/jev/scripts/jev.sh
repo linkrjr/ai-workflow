@@ -39,7 +39,12 @@ case "$cmd" in
     }'
     ;;
   loop-guard)
-    [[ $# -eq 2 && -r "$1" && -r "$2" ]] || usage
+    [[ $# -eq 2 ]] || usage
+    # The lead can drop a queued round, so an earlier findings file may not exist.
+    if [[ ! -r "$1" || ! -r "$2" ]]; then
+      echo "JEV $cmd: UNAVAILABLE (a round's findings file is missing)"
+      exit 0
+    fi
     state="PREVIOUS ROUND FINDINGS:
 $(head -c "$((MAX_STATE_BYTES / 2))" "$1")
 

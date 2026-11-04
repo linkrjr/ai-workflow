@@ -4,19 +4,19 @@ description: Fetch and summarize Linear issues via the GraphQL API directly, no 
 ---
 
 Calls Linear's GraphQL API at https://api.linear.app/graphql through
-`scripts/linear.sh`, which reads `LINEAR_API_KEY` from the environment. Never
+`${CLAUDE_SKILL_DIR}/scripts/linear.sh`, which reads `LINEAR_API_KEY` from the environment. Never
 print or echo the key.
 
 ## Commands
 
-- `scripts/linear.sh my-issues [open|all]` — caller's assigned issues (default: open only)
-- `scripts/linear.sh issue <IDENTIFIER>` — one issue by identifier, e.g. `ENG-123`
-- `scripts/linear.sh team <TEAM_KEY> [limit]` — a team's issues (default limit 25)
-- `scripts/linear.sh search <TEXT>` — full-text issue search
-- `scripts/linear.sh projects [limit]` — list Linear projects (id, name; default limit 50) — use this to let a caller pick a project by name before passing it to `create-issue`
-- `scripts/linear.sh raw < query.graphql` — escape hatch for anything the canned
+- `${CLAUDE_SKILL_DIR}/scripts/linear.sh my-issues [open|all]` — caller's assigned issues (default: open only)
+- `${CLAUDE_SKILL_DIR}/scripts/linear.sh issue <IDENTIFIER>` — one issue by identifier, e.g. `ENG-123`
+- `${CLAUDE_SKILL_DIR}/scripts/linear.sh team <TEAM_KEY> [limit]` — a team's issues (default limit 25)
+- `${CLAUDE_SKILL_DIR}/scripts/linear.sh search <TEXT>` — full-text issue search
+- `${CLAUDE_SKILL_DIR}/scripts/linear.sh projects [limit]` — list Linear projects (id, name; default limit 50) — use this to let a caller pick a project by name before passing it to `create-issue`
+- `${CLAUDE_SKILL_DIR}/scripts/linear.sh raw < query.graphql` — escape hatch for anything the canned
   read queries don't cover; rejects any body containing the word `mutation`
-- `scripts/linear.sh create-issue <TEAM_KEY> <TITLE> < payload.json` — creates
+- `${CLAUDE_SKILL_DIR}/scripts/linear.sh create-issue <TEAM_KEY> <TITLE> < payload.json` — creates
   one issue on that team. `payload.json` is
   `{"description": "...", "labels": ["a","b"], "project": "Name"}` (all three
   optional). Any label name that doesn't already exist on the team is created
@@ -25,7 +25,7 @@ print or echo the key.
   loudly instead of guessing. The issue is assigned to the API key's own user
   and set to the team's `started` (in progress) workflow state. Prints the
   created issue's `identifier` and `url`.
-- `scripts/linear.sh set-state <IDENTIFIER> <TEAM_KEY> <STATE_TYPE>` — moves
+- `${CLAUDE_SKILL_DIR}/scripts/linear.sh set-state <IDENTIFIER> <TEAM_KEY> <STATE_TYPE>` — moves
   an existing issue to a workflow state, where `STATE_TYPE` is one of Linear's
   standard types: `backlog`, `unstarted`, `started`, `completed`, `canceled`.
   Fails loudly if the team has no state of that type.

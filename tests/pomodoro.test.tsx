@@ -1,5 +1,8 @@
 import { expect, mock, test } from 'claude-code/testing'
 
+// The tests' tsconfig has no DOM or Node lib to declare it.
+declare const setTimeout: (run: (value: unknown) => void, ms: number) => unknown
+
 const BAND = {
   plugin: 'ai-workflow',
   component: 'AbovePrompt',

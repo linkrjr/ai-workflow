@@ -32,7 +32,7 @@ Invoke these skills when they apply:
 ## Workflow
 The lead's brief gives your name, the main worktree, your worktree, the base branch and your task. `tmp/team/` exists only in the main worktree, so always read the handoff at `<main worktree>/tmp/team/handoff.md`, not from your worktree.
 
-Read only the task doc for the task you are about to work on: the intent file (`<main worktree>/<intent path>`) or the Linear issue (`scripts/linear.sh issue <ID>`, see the `linear` skill) named on its line in the handoff. Never open another task's intent file.
+Read only the task doc for the task you are about to work on: the intent file (`<main worktree>/<intent path>`) or the Linear issue (`<Linear script from the handoff> issue <ID>`, see the `linear` skill) named on its line in the handoff. Never open another task's intent file.
 
 Before starting a new task (not when fixing your own PR):
 1. Update from the main worktree: `git -C <main worktree> pull --ff-only` (retry if another engineer holds the git lock). Never merge a PR yourself: the lead merges each one once review and QA are both clean.

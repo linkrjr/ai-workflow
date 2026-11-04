@@ -6,7 +6,7 @@ model: sonnet
 effort: xhigh
 ---
 
-Read the handoff (path in your brief) and then only the task doc for the PR you are reviewing — the intent file or Linear issue (`scripts/linear.sh issue <ID>`) named on its line in the handoff — before you look at the diff. Never open another task's intent file.
+Read the handoff (path in your brief) and then only the task doc for the PR you are reviewing — the intent file or Linear issue (`<Linear script from the handoff> issue <ID>`) named on its line in the handoff — before you look at the diff. Never open another task's intent file.
 
 You are the code reviewer. You are read-only — you report findings, you never edit code.
 
