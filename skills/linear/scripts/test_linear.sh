@@ -48,7 +48,7 @@ case "$body" in
     else echo '{"data":{"issueLabelCreate":{"issueLabel":{"id":"new-label"}}}}'; fi ;;
   *issueLabels*) echo '{"data":{"issueLabels":{"nodes":[]}}}' ;;
   *issueUpdate*) echo '{"errors":[{"message":"nope"}]}' ;;
-  *states*) echo '{"data":{"team":{"states":{"nodes":[{"id":"s1","type":"started"},{"id":"s2","type":"completed"}]}}}}' ;;
+  *states*) echo '{"data":{"team":{"states":{"nodes":[{"id":"s0","name":"Todo","type":"unstarted"},{"id":"s1","name":"In Progress","type":"started"},{"id":"s2","name":"Done","type":"completed"},{"id":"s3","name":"In Review","type":"started"}]}}}}' ;;
   *viewer*) echo '{"data":{"viewer":{"id":"v1"}}}' ;;
   *) echo '{"data":{"team":{"id":"t1"}}}' ;;
 esac
@@ -74,6 +74,16 @@ check "create-issue sends the created label's id" '["new-label"]' "$(jq -c '.lab
 rc=0; create label-fails '{"labels":["a"]}' || rc=$?
 check "a failed label creation exits 1" 1 "$rc"
 check "a failed label creation creates no issue" 0 "$(wc -l <"$STUB_LOG" | tr -d ' ')"
+
+create "" '{}'
+check "create-issue starts in progress by default" s1 "$(jq -r '.stateId' "$STUB_LOG")"
+create "" '{"state":"unstarted"}'
+check "create-issue takes a state type" s0 "$(jq -r '.stateId' "$STUB_LOG")"
+create "" '{"state":"in review"}'
+check "create-issue takes a state name, any case" s3 "$(jq -r '.stateId' "$STUB_LOG")"
+rc=0; create "" '{"state":"nope"}' || rc=$?
+check "an unknown state exits 1" 1 "$rc"
+check "an unknown state creates no issue" 0 "$(wc -l <"$STUB_LOG" | tr -d ' ')"
 
 rc=0; create create-false '{}' || rc=$?
 check "success:false from Linear exits 1" 1 "$rc"

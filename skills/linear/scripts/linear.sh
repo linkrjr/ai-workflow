@@ -23,8 +23,8 @@ usage:
                                           # but no matching Linear project exists.
                                           # Assigns the issue to the API key's own user and
                                           # sets it to the team's "started" (in progress) state.
-  linear.sh set-state <IDENTIFIER> <TEAM_KEY> <STATE_TYPE>
-                                          # STATE_TYPE: backlog | unstarted | started | completed | canceled
+  linear.sh set-state <IDENTIFIER> <TEAM_KEY> <STATE>
+                                          # STATE: backlog | unstarted | started | completed | canceled, or a state's name
                                           # moves an existing issue to that workflow state
 EOF
   exit 1
@@ -117,12 +117,13 @@ find_viewer_id() {
 }
 
 find_state_id() {
-  local team_id="$1" state_type="$2"
-  local query='query($teamId: String!) { team(id: $teamId) { states { nodes { id type } } } }'
+  local team_id="$1" state="$2"
+  local query='query($teamId: String!) { team(id: $teamId) { states { nodes { id name type } } } }'
   local resp; resp="$(post "$query" "$(jq -n --arg teamId "$team_id" '{teamId: $teamId}')")"
-  local id; id="$(jq -r --arg type "$state_type" '[.data.team.states.nodes[] | select(.type == $type)][0].id // empty' <<< "$resp")"
+  # A standard type, or a state's name, since "In Review" is a name whose type is "started".
+  local id; id="$(jq -r --arg state "$state" '.data.team.states.nodes as $n | ([$n[] | select(.type == $state)] + [$n[] | select(.name | ascii_downcase == ($state | ascii_downcase))])[0].id // empty' <<< "$resp")"
   if [[ -z "$id" ]]; then
-    echo "error: no '$state_type' workflow state found for this team" >&2
+    echo "error: no '$state' workflow state found for this team" >&2
     echo "$resp" >&2
     exit 1
   fi
@@ -183,7 +184,7 @@ case "$cmd" in
     team_id="$(find_team_id "$team_key")"
     label_ids="$(ensure_label_ids "$team_id" "$labels")"
     assignee_id="$(find_viewer_id)"
-    state_id="$(find_state_id "$team_id" "started")"
+    state_id="$(find_state_id "$team_id" "$(jq -r '.state // "started"' <<< "$payload")")"
 
     input="$(jq -n --arg teamId "$team_id" --arg title "$title" --arg desc "$description" \
       --argjson labelIds "$label_ids" --arg assigneeId "$assignee_id" --arg stateId "$state_id" \
@@ -197,10 +198,10 @@ case "$cmd" in
     post "$query" "$(jq -n --argjson input "$input" '{input: $input}')"
     ;;
   set-state)
-    issue_id="${2:-}"; team_key="${3:-}"; state_type="${4:-}"
-    [[ -z "$issue_id" || -z "$team_key" || -z "$state_type" ]] && usage
+    issue_id="${2:-}"; team_key="${3:-}"; state="${4:-}"
+    [[ -z "$issue_id" || -z "$team_key" || -z "$state" ]] && usage
     team_id="$(find_team_id "$team_key")"
-    state_id="$(find_state_id "$team_id" "$state_type")"
+    state_id="$(find_state_id "$team_id" "$state")"
     query='mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success issue { identifier state { name type } } } }'
     post "$query" "$(jq -n --arg id "$issue_id" --arg stateId "$state_id" '{id: $id, input: {stateId: $stateId}}')"
     ;;

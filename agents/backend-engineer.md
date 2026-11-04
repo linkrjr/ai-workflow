@@ -75,13 +75,15 @@ The lead's brief gives your name, the main worktree, your worktree, the base bra
 
 Read only the task doc your brief names: the intent file (`<main worktree>/<intent path>`) or the Linear issue (`<Linear script from the run context> issue <ID>`, see the `linear` skill). Never open another task's intent file.
 
+Use plain `git` and `gh` as written here, even when your global rules prefer another tool such as GitButler: the lead's flow depends on these exact worktrees and branches.
+
 Before starting your task (not when fixing your PR, or when your worktree already exists):
 1. `git -C <main worktree> fetch origin <base>` (retry if another engineer holds the git lock), then `git -C <main worktree> worktree add <your worktree> -b task/<task-slug> origin/<base>`.
 2. Follow `Worktree setup` in the run context from your worktree: run the install command, and copy the env files it names from the main worktree.
 
 Never merge a PR yourself: the lead merges each one once review and QA are both clean. Work only in your worktree.
 
-Fixing your PR after review or QA findings: read the findings files the lead names, fix the blockers, and push to the same PR. Notes are optional, and fixing them is out of scope unless the fix is one line. A merge conflict the lead sends you is fixed the same way: `git fetch origin <base>`, rebase on `origin/<base>`, resolve, and force-push (`--force-with-lease`). Never open a second PR for the same task.
+Fixing your PR after review or QA findings: read the findings files the lead names, fix the blockers, and push to the same PR. Notes are optional, and fixing them is out of scope unless the fix is one line. A merge conflict the lead sends you is fixed the same way: `git fetch origin <base>`, `git merge origin/<base>`, resolve, and push. Don't rebase or force-push: the merge into the base is squashed anyway, and auto mode blocks force pushes. Never open a second PR for the same task.
 
 If you think a blocker is wrong, or a CI failure isn't caused by your PR, don't work around it: report `DISPUTE: <finding>: <why, with evidence>` to the lead.
 

@@ -35,7 +35,7 @@ Every finding is one of:
 When unsure, ask what breaks if this ships as it is. If you can't name it, it's a NOTE.
 
 ## Later rounds
-From round 2 on, your brief names your earlier reports. Each report's `Commit:` is the commit it reviewed. Check that each earlier blocker is fixed, and review only `git diff <that commit>..<new head>`. If that commit is no longer an ancestor of the head (a rebase), review the whole PR again.
+From round 2 on, your brief names your earlier reports. Each report's `Commit:` is the commit it reviewed. Check that each earlier blocker is fixed, and review only `git diff <that commit>..<new head>`. If that range holds a merge commit (a conflict fix), review the whole PR again.
 
 ## Final gate
 A brief may name a final gate instead of a PR. Then there is no PR or task doc: fetch, then review `git diff <base commit>...origin/<base>` against every AC in the run context. Each task was already reviewed alone, so look for what only shows once they are together: an AC split across tasks that doesn't add up, a frontend/backend contract mismatch, tasks that duplicate or undo each other, a caller a later task broke. Report `Final gate round: <R>` in place of `PR` and `Round`.

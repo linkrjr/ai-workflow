@@ -18,17 +18,17 @@ print or echo the key.
   read queries don't cover; rejects any body containing the word `mutation`
 - `${CLAUDE_SKILL_DIR}/scripts/linear.sh create-issue <TEAM_KEY> <TITLE> < payload.json` — creates
   one issue on that team. `payload.json` is
-  `{"description": "...", "labels": ["a","b"], "project": "Name"}` (all three
+  `{"description": "...", "labels": ["a","b"], "project": "Name", "state": "unstarted"}` (all
   optional). Any label name that doesn't already exist on the team is created
   automatically. `project`, if given, must match an existing Linear project by
   name exactly — the project is not created if missing, and the command fails
   loudly instead of guessing. The issue is assigned to the API key's own user
-  and set to the team's `started` (in progress) workflow state. Prints the
+  and set to `state`, by default the team's `started` (in progress) workflow state. Prints the
   created issue's `identifier` and `url`.
-- `${CLAUDE_SKILL_DIR}/scripts/linear.sh set-state <IDENTIFIER> <TEAM_KEY> <STATE_TYPE>` — moves
-  an existing issue to a workflow state, where `STATE_TYPE` is one of Linear's
-  standard types: `backlog`, `unstarted`, `started`, `completed`, `canceled`.
-  Fails loudly if the team has no state of that type.
+- `${CLAUDE_SKILL_DIR}/scripts/linear.sh set-state <IDENTIFIER> <TEAM_KEY> <STATE>` — moves
+  an existing issue to a workflow state, where `STATE` is one of Linear's
+  standard types (`backlog`, `unstarted`, `started`, `completed`, `canceled`)
+  or a state's name, e.g. `"In Review"`. Fails loudly if the team has no such state.
 
 Prefer the canned commands above — they're tested and return only the fields
 needed for a summary (identifier, title, state, assignee, priority, url).
@@ -41,7 +41,7 @@ through `create-issue` instead.
 `create-issue` and `set-state` are the two mutations this skill exposes, and
 both are scoped tightly: `create-issue` is one issue, one team, an optional
 existing project, auto-created labels, self-assignment, and an initial
-`started` state — nothing else (no priority, no cycle). `set-state` only
+state — nothing else (no priority, no cycle). `set-state` only
 moves an issue between existing workflow states, nothing else. Ticket
 creation and state changes are visible to the whole team and not easily
 undone — whoever calls these commands (e.g. the `orchestrator` skill) is
