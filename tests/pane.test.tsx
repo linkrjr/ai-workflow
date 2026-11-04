@@ -205,7 +205,8 @@ test('the permission box shows each waiting ask', async ($, on) => {
 })
 
 test('Proceed in the pane answers an ask a person would', async ($, on) => {
-  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  let now = Date.parse('2026-10-25T14:20:00')
+  on('clock.now', () => ({ value: now }))
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('tool.check', () => ({ decision: 'ask' as const, reason: 'rm is not allowed by default' }))
@@ -229,6 +230,7 @@ test('Proceed in the pane answers an ask a person would', async ($, on) => {
     approver: 'person',
   })
   await isStored
+  now += 5000
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /waiting on your answer/ }))?.text).toBe('  Claude is waiting on your answer')
   await ui.press({ key: 'proceed-t1' })
@@ -239,7 +241,8 @@ test('Proceed in the pane answers an ask a person would', async ($, on) => {
 
 test('Cancel above the prompt refuses an ask a person would answer', async ($, on) => {
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
-  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  let now = Date.parse('2026-10-25T14:20:00')
+  on('clock.now', () => ({ value: now }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('tool.check', () => ({ decision: 'ask' as const }))
   on('process.spawn', async function* (_, e, next) {
@@ -264,6 +267,7 @@ test('Cancel above the prompt refuses an ask a person would answer', async ($, o
     props: { hasSurvey: false, isWorking: true, maxRows: 3, bodyColumns: 100, scroll: { offset: 0, bodyRows: 3 }, view: {} },
   })
   expect((await band.find({ type: 'Text', text: /^⚠/ }))?.text).toBe('⚠ Leader wants Bash: git push  ')
+  now += 5000
   await band.press({ key: 'band-cancel-t2' })
   await band.unmount()
 
@@ -401,4 +405,117 @@ test('the compact tool compacts once the main turn ends', async ($, on) => {
   await $.turn.complete({ answer: 'paused', durationMs: 1, isAborted: false, turnId: 'x', reason: 'answer' })
   await clock.advance(1000)
   expect(compacted).toEqual(['keep the spec path'])
+})
+
+// The tests' tsconfig has no DOM or Node lib to declare it.
+declare const setTimeout: (run: (value: unknown) => void, ms: number) => unknown
+const settle = () => new Promise(resolve => setTimeout(resolve, 50))
+
+// Asks a person answers, each held until the pane settles it or the plugin hands it to the prompt.
+function holdAsks($: any, on: any) {
+  const clock = { now: Date.parse('2026-10-25T14:20:00') }
+  on('clock.now', () => ({ value: clock.now }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.check', () => ({ decision: 'ask' as const }))
+  on('process.spawn', async function* (_: unknown, e: unknown, next: any) {
+    await new Promise<void>(resolve => next.signal.addEventListener('abort', () => resolve()))
+    return { value: { code: null, signal: 'SIGTERM' } }
+  })
+  const writes: any[][] = []
+  const waiters: (() => void)[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_: unknown, e: any, next: any) => {
+    writes.push(e.value)
+    waiters.splice(0).forEach(run => run())
+    return next(e)
+  })
+  const ask = (id: string, tool: string, input: Record<string, unknown>) => {
+    const isStored = new Promise<void>(resolve => waiters.push(resolve))
+    const verdict = $.tool.check({ tool, input, tool_use_id: id, approver: 'person' })
+    return { verdict, isStored }
+  }
+  return { clock, ask, writes }
+}
+
+const pending = (verdict: Promise<unknown>) => Promise.race([verdict, settle().then(() => 'pending')])
+
+test('a press right after an ask comes up is ignored; a later one answers it', async ($, on) => {
+  const { clock, ask } = holdAsks($, on)
+  const { verdict, isStored } = ask('t1', 'Bash', { command: 'rm -rf build' })
+  await isStored
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'proceed-t1' })
+  expect(await pending(verdict)).toBe('pending')
+  clock.now += 5000
+  await ui.press({ key: 'proceed-t1' })
+  expect((await verdict).decision).toBe('allow')
+  await ui.unmount()
+})
+
+test('a double press answers one ask and leaves the next one waiting', async ($, on) => {
+  const { clock, ask } = holdAsks($, on)
+  const first = ask('t1', 'Bash', { command: 'ls' })
+  await first.isStored
+  const second = ask('t2', 'Bash', { command: 'rm -rf build' })
+  await second.isStored
+  clock.now += 5000
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'proceed-t1' })
+  expect((await first.verdict).decision).toBe('allow')
+  await settle()
+  await ui.press({ key: 'proceed-t2' })
+  expect(await pending(second.verdict)).toBe('pending')
+  clock.now += 5000
+  await ui.press({ key: 'cancel-t2' })
+  expect((await second.verdict).decision).toBe('deny')
+  await ui.unmount()
+})
+
+test('an Edit ask shows its change, and other input shows whole', async ($, on) => {
+  const { clock, ask, writes } = holdAsks($, on)
+  const edit = ask('t1', 'Edit', { file_path: '/a/b.ts', old_string: 'one', new_string: 'two\nthree' })
+  await edit.isStored
+  const long = 'x'.repeat(400)
+  const mcp = ask('t2', 'mcp__x__y', { value: long })
+  await mcp.isStored
+  const [e, m] = writes.at(-1)!
+  expect([e.label, e.detail, e.isAnswerable]).toEqual(['Change', '/a/b.ts\n- one\n+ two\n+ three', true])
+  expect([m.label, m.detail, m.isAnswerable]).toEqual(['Input', JSON.stringify({ value: long }), true])
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^\/a\/b\.ts/ }))?.text).toBe('/a/b.ts\n- one\n+ two\n+ three')
+  clock.now += 5000
+  await ui.press({ key: 'cancel-t1' })
+  await edit.verdict
+  await settle()
+  clock.now += 5000
+  await ui.press({ key: 'cancel-t2' })
+  await mcp.verdict
+  await ui.unmount()
+})
+
+test('an ask too long to read whole goes to the engine prompt', async ($, on) => {
+  const { ask, writes } = holdAsks($, on)
+  const { verdict } = ask('t1', 'Bash', { command: `echo ${'x'.repeat(2000)}` })
+  expect((await verdict).decision).toBe('ask')
+  expect(writes[0]![0].isAnswerable).toBe(false)
+})
+
+test('the band offers no answer when the ask would not fit on its row', async ($, on) => {
+  const { clock, ask } = holdAsks($, on)
+  const { verdict, isStored } = ask('t1', 'Bash', { command: 'git status\nrm -rf build' })
+  await isStored
+  const band = await $.ui.mount({
+    plugin: 'ai-workflow',
+    component: 'AbovePrompt',
+    surface: 'terminal',
+    props: { hasSurvey: false, isWorking: true, maxRows: 3, bodyColumns: 100, scroll: { offset: 0, bodyRows: 3 }, view: {} },
+  })
+  expect((await band.find({ type: 'Text', text: /^⚠/ }))?.text).toBe('⚠ Leader wants Bash: read it in the agent teams pane')
+  expect(await band.find({ type: 'Button' })).toBeUndefined()
+  await band.unmount()
+  clock.now += 5000
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'cancel-t1' })
+  expect((await verdict).decision).toBe('deny')
+  await ui.unmount()
 })

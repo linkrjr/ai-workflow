@@ -32,7 +32,7 @@ export type Ask = {
   id: string
   who: string
   tool: string
-  // what the call would act on, as `askDetail` names it: `Command`, `File`, ...
+  // what the call would do, as `askDetail` names it: `Command`, `Change`, `File`, ...
   label: string
   detail: string
   reason?: string

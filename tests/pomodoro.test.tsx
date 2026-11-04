@@ -521,7 +521,7 @@ test('AC14: a Proceed / Cancel ask stays first, the Pomodoro row below it', asyn
     if (e.value.some((a: any) => a.isAnswerable)) stored()
     return next(e)
   })
-  await boot($, on)
+  const { clock } = await boot($, on)
   await run($)
   const verdict = $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't1', approver: 'person' })
   await isStored
@@ -529,6 +529,7 @@ test('AC14: a Proceed / Cancel ask stays first, the Pomodoro row below it', asyn
   const ui = await $.ui.mount(BAND)
   expect(await buttons(ui)).toEqual(['band-proceed-t1', 'band-cancel-t1', 'pomodoro-pause', 'pomodoro-stop'])
   expect((await ui.find({ type: 'Text', text: /^⚠/ }))?.text).toBe('⚠ Leader wants Bash: git push  ')
+  await clock.advance(5000)
   await ui.press({ key: 'band-cancel-t1' })
   await ui.unmount()
   expect((await verdict).decision).toBe('deny')

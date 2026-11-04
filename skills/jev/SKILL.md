@@ -1,6 +1,6 @@
 ---
 name: jev
-description: Advisory risk signals from TypeSafe's Jev model for the ai-workflow pipeline — PR triage before code review, a stall check on repeating review rounds, and a spec clarity check after /workshop. Used by /workshop and /orchestrator; never decides a gate. Needs TYPESAFE_API_KEY, and does nothing without it.
+description: Advisory risk signals from TypeSafe's Jev model for the ai-workflow pipeline — PR triage before code review, a stall check on repeating review rounds, and a spec clarity check after /workshop. Used by /workshop and /orchestrator; never decides a gate. Needs TYPESAFE_API_KEY and a .jev-enabled file in the repo, and does nothing without both.
 ---
 
 Calls TypeSafe's Jev model (`POST https://api.typesafe.ai/v1/systemone`) through
@@ -12,6 +12,13 @@ It cannot run the project, read the rest of the repo or write code, so its signa
 are **advisory**: they point attention, they never replace `code-reviewer`,
 `qa-tester` or the user's decision. Calibrate before trusting them: run the script on
 diffs and specs whose quality you already know.
+
+## Opt-in
+
+The script sends the whole diff or spec to TypeSafe, with no secret scrubbing. So it
+makes no request unless the repo opted in with a `.jev-enabled` file at its root, even
+with `TYPESAFE_API_KEY` set. Never create that file yourself; the repo's owner decides.
+Commit it so every worktree and teammate gets the same answer.
 
 ## Commands
 
@@ -30,7 +37,7 @@ per signal and a `JEV VERDICT:` line. A value at or above `JEV_FLAG_AT` (default
 
 ## Never blocks
 
-If `TYPESAFE_API_KEY` is unset, the input is empty, the request fails, or the answer
+If the repo hasn't opted in, `TYPESAFE_API_KEY` is unset, the input is empty, the request fails, or the answer
 has an unexpected shape, the script prints `JEV <command>: UNAVAILABLE (<reason>)`
 and exits 0. Treat that as "no signal": carry on exactly as if Jev were not part of
 the pipeline, and say once, in one line, that Jev was unavailable and why. Only a

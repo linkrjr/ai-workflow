@@ -28,9 +28,19 @@ const ASK_WAIT_S = 600
 // Tools whose dialog is the person's own (a question, a plan): a hook's allow cannot answer it.
 const PERSON_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode'])
 
+// A press this soon after an ask comes up is ignored: a double press, or a digit meant for
+// something else, must not answer a request nobody has read.
+const ARM_MS = 1000
+// The longest ask the pane answers. Past this it can't be read whole, so the engine's prompt asks.
+const MAX_ASK_LINES = 20
+const MAX_ASK_CHARS = 1500
+// What the band's Proceed and Cancel take up on its row.
+const BAND_BUTTONS_WIDTH = 20
+
 type Choice = 'proceed' | 'cancel'
 // The pane's buttons settle a waiting ask through these, keyed by its tool_use_id.
-const answers = new Map<string, (choice: Choice) => void>()
+const answers = new Map<string, { settle: (choice: Choice) => void; shownAt: number }>()
+let answeredAt = 0
 
 // The two roles' colors: the legend, the leader box and the agents box.
 const LEADER_COLOR = '#cd7b5b'
@@ -132,14 +142,42 @@ const describeCall = (tool: string, input: Record<string, unknown>) => {
   return mask(what ? `${tool} → ${what}` : tool)
 }
 
-// What a call asking permission would act on, whole: its command, file, URL or pattern.
-const askDetail = (input: unknown) => {
+const marked = (mark: string, text: string) => text.split('\n').map(line => `${mark} ${line}`)
+
+// What a call asking permission would do, whole: an edit's change, or its command, file, URL,
+// pattern or raw input.
+const askDetail = (tool: string, input: unknown) => {
   const i = typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {}
-  const fields: [string, string][] = [['command', 'Command'], ['file_path', 'File'], ['url', 'URL'], ['pattern', 'Pattern']]
-  for (const [key, label] of fields) {
-    if (typeof i[key] === 'string') return { label, detail: mask(i[key] as string) }
+  const str = (key: string) => (typeof i[key] === 'string' ? (i[key] as string) : undefined)
+  const file = str('file_path')
+  if (tool === 'Edit' && file) {
+    const change = [file, ...marked('-', str('old_string') ?? ''), ...marked('+', str('new_string') ?? '')]
+    return { label: 'Change', detail: mask(change.join('\n')) }
   }
-  return { label: 'Input', detail: mask(shorten(JSON.stringify(i), 300)) }
+  if (tool === 'Write' && file) {
+    return { label: 'Change', detail: mask([file, ...marked('+', str('content') ?? '')].join('\n')) }
+  }
+  const pattern = str('pattern')
+  if (pattern) return { label: 'Pattern', detail: mask(str('path') ? `${pattern} in ${str('path')}` : pattern) }
+  const fields: [string, string][] = [['command', 'Command'], ['file_path', 'File'], ['url', 'URL']]
+  for (const [key, label] of fields) {
+    const value = str(key)
+    if (value) return { label, detail: mask(value) }
+  }
+  return { label: 'Input', detail: mask(JSON.stringify(i)) }
+}
+
+const isReadable = (detail: string) => detail.length <= MAX_ASK_CHARS && detail.split('\n').length <= MAX_ASK_LINES
+
+// What the Proceed and Cancel buttons call. Ignored until the ask has been up for ARM_MS, and
+// counting from the last answer, since the next waiting ask takes the buttons' place at once.
+async function answerAsk($: EngineInterface, id: string, choice: Choice) {
+  const ask = answers.get(id)
+  if (!ask) return
+  const now = await $.clock.now()
+  if (now < Math.max(ask.shownAt, answeredAt) + ARM_MS) return
+  answeredAt = now
+  ask.settle(choice)
 }
 
 // A turn the engine opened with a tagged message (a teammate's, a notification) is the engine's.
@@ -167,8 +205,8 @@ async function endTaskIfDone($: EngineInterface) {
 // Waits for the ask's Proceed / Cancel, or undefined once ASK_WAIT_S pass or the dispatch aborts.
 // ponytail: a sleeping child process is the wait, since a hook's own time is capped at 10s but
 // stands still while a $ call is in flight; swap it for a real wait if the engine grows one
-async function waitForAnswer($: EngineInterface, id: string): Promise<Choice | undefined> {
-  const pressed = new Promise<Choice>(resolve => answers.set(id, resolve))
+async function waitForAnswer($: EngineInterface, id: string, shownAt: number): Promise<Choice | undefined> {
+  const pressed = new Promise<Choice>(settle => answers.set(id, { settle, shownAt }))
   const sleeping = $.process.spawn({ argv: ['sleep', String(ASK_WAIT_S)] })[Symbol.asyncIterator]()
   const expired = (async () => {
     while (!(await sleeping.next()).done);
@@ -315,7 +353,8 @@ export const register: Register = (on, options) => {
     const id = e.tool_use_id
     if (r.decision !== 'ask' || !id || mode === 'auto') return r
     const sub = (await read($, subagents)).find(a => a.id === e.agentId)
-    const isPerson = e.approver === 'person' && !PERSON_TOOLS.has(e.tool)
+    const shown = askDetail(e.tool, e.input)
+    const isPerson = e.approver === 'person' && !PERSON_TOOLS.has(e.tool) && isReadable(shown.detail)
     // Always On off: an ask doesn't open the pane; it is answered there only if already open.
     const placed = !isPerson
       ? undefined
@@ -326,15 +365,16 @@ export const register: Register = (on, options) => {
       id,
       who: sub ? capitalize(sub.name) : e.agentId ? 'A subagent' : 'Leader',
       tool: e.tool,
-      ...askDetail(e.input),
+      ...shown,
       reason: r.reason,
       rule: r.rule,
       isAnswerable: placed?.isPlaced === true,
     }
+    const shownAt = ask.isAnswerable ? await $.clock.now() : 0
     await update($, asks, all => [...all.filter(a => a.id !== id), ask])
     if (!ask.isAnswerable) return r
 
-    const choice = await waitForAnswer($, id)
+    const choice = await waitForAnswer($, id, shownAt)
     await update($, asks, all => all.filter(a => a.id !== id))
     if (choice === undefined) return r // no answer in time: the engine's prompt asks
     await say($, ask.who, `${choice === 'proceed' ? 'allowed' : 'cancelled'} · ${ask.tool} → ${ask.detail}`, choice === 'cancel')
@@ -416,7 +456,8 @@ export const register: Register = (on, options) => {
     return row ?? above
   })
 
-  // The first answerable ask, above the prompt too: a bare 1 or 2 in an empty prompt answers it.
+  // The first answerable ask, above the prompt too: a bare 1 or 2 in an empty prompt answers it,
+  // but only when its whole request fits on the row. Otherwise the band points at the pane.
   // With Always On off and the pane closed, the band offers to open it instead.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
@@ -430,14 +471,22 @@ export const register: Register = (on, options) => {
         </Box>
       )
     }
+    const summary = `⚠ ${a.who} wants ${a.tool}: `
+    if (a.detail.includes('\n') || summary.length + a.detail.length + 2 + BAND_BUTTONS_WIDTH > e.props.bodyColumns) {
+      return (
+        <Box>
+          <Text color={ASK_COLOR} wrap="truncate-end">{summary}read it in the agent teams pane</Text>
+        </Box>
+      )
+    }
     return (
       <Box>
         <Text color={ASK_COLOR} wrap="truncate-end">
-          ⚠ {a.who} wants {a.tool}: {a.detail}{'  '}
+          {summary}{a.detail}{'  '}
         </Text>
-        <Button key={`band-proceed-${a.id}`} label="Proceed" hotkey="1" plain onPress={() => answers.get(a.id)?.('proceed')} />
+        <Button key={`band-proceed-${a.id}`} label="Proceed" hotkey="1" plain onPress={() => answerAsk($, a.id, 'proceed')} />
         <Text> </Text>
-        <Button key={`band-cancel-${a.id}`} label="Cancel" hotkey="2" plain onPress={() => answers.get(a.id)?.('cancel')} />
+        <Button key={`band-cancel-${a.id}`} label="Cancel" hotkey="2" plain onPress={() => answerAsk($, a.id, 'cancel')} />
       </Box>
     )
   })
@@ -508,10 +557,14 @@ export const register: Register = (on, options) => {
                   <Box width={9} flexShrink={0}>
                     <Text dimColor>{a.label}</Text>
                   </Box>
-                  {/* One line: a long or multi-line command is cut at the panel's edge with an ellipsis. */}
-                  <Text bold wrap="truncate-end">
-                    {a.detail.replace(/\s+/g, ' ')}
-                  </Text>
+                  {/* Whole when the pane answers it; else one line, since the engine's prompt shows it whole. */}
+                  {a.isAnswerable ? (
+                    <Text bold>{a.detail}</Text>
+                  ) : (
+                    <Text bold wrap="truncate-end">
+                      {a.detail.replace(/\s+/g, ' ')}
+                    </Text>
+                  )}
                 </Box>
                 {a.reason && (
                   <Box>
@@ -525,9 +578,9 @@ export const register: Register = (on, options) => {
             ))}
             {waiting[0]?.isAnswerable ? (
               <Box marginTop={1}>
-                <Button key={`proceed-${waiting[0].id}`} label="Proceed" hotkey="1" plain onPress={() => answers.get(waiting[0]!.id)?.('proceed')} />
+                <Button key={`proceed-${waiting[0].id}`} label="Proceed" hotkey="1" plain onPress={() => answerAsk($, waiting[0]!.id, 'proceed')} />
                 <Text> </Text>
-                <Button key={`cancel-${waiting[0].id}`} label="Cancel" hotkey="2" plain onPress={() => answers.get(waiting[0]!.id)?.('cancel')} />
+                <Button key={`cancel-${waiting[0].id}`} label="Cancel" hotkey="2" plain onPress={() => answerAsk($, waiting[0]!.id, 'cancel')} />
                 <Text dimColor italic>
                   {'  '}Claude is waiting on your answer{waiting.length > 1 ? ` (1 of ${waiting.length})` : ''}
                 </Text>

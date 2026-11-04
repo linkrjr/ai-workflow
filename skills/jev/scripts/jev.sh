@@ -68,6 +68,12 @@ $(head -c "$((MAX_STATE_BYTES / 2))" "$2")"
   *) usage ;;
 esac
 
+# Diffs and specs leave the machine, so a key alone isn't consent: each repo opts in.
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+if [[ ! -e "$root/.jev-enabled" ]]; then
+  echo "JEV $cmd: UNAVAILABLE (not enabled for this repo: create .jev-enabled at its root)"
+  exit 0
+fi
 if [[ -z "$state" ]]; then
   echo "JEV $cmd: UNAVAILABLE (empty input)"
   exit 0
