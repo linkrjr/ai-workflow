@@ -1,6 +1,6 @@
 ---
 name: jev
-description: Advisory risk signals from TypeSafe's Jev model for the ai-workflow pipeline — PR triage before code review, a stall check on repeating review rounds, and a spec clarity check after /workshop. Used by /workshop and /orchestrator; never decides a gate. Needs TYPESAFE_API_KEY and a .jev-enabled file in the repo, and does nothing without both.
+description: Advisory risk signals from TypeSafe's Jev model for the ai-workflow pipeline — a stall check on repeating review rounds and a spec clarity check during /workshop, plus a PR triage command kept for calibration. Used by /workshop and /orchestrator; never decides a gate. Needs TYPESAFE_API_KEY and a .jev-enabled file in the repo, and does nothing without both.
 ---
 
 Calls TypeSafe's Jev model (`POST https://api.typesafe.ai/v1/systemone`) through
@@ -27,7 +27,7 @@ per signal and a `JEV VERDICT:` line. A value at or above `JEV_FLAG_AT` (default
 `0.6`) is a `FLAG`.
 
 - `${CLAUDE_SKILL_DIR}/scripts/jev.sh triage < pr.diff` — signals `security_surface`, `contract_change`,
-  `untested_logic`, `mixed_concerns`. Verdict `ATTENTION (n)` or `NO SIGNALS`.
+  `untested_logic`, `mixed_concerns`. Verdict `ATTENTION (n)` or `NO SIGNALS`. Not part of the pipeline until it's calibrated, because it only reordered PRs of equal age.
 - `${CLAUDE_SKILL_DIR}/scripts/jev.sh loop-guard <PREV_FILE> <CURRENT_FILE>` — signals `repeated_findings`,
   `oscillating`, comparing two rounds' review or QA findings. Verdict `STALLED` or
   `PROGRESSING`.

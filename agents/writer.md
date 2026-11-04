@@ -2,7 +2,7 @@
 name: writer
 description: Writes and updates README files, API docs (including the OpenAPI spec for public endpoints), and code comments. Use for documentation tasks that are not scoped to backend or frontend implementation.
 tools: Read, Edit, Write, Grep, Glob, Bash, Skill
-model: sonnet
+model: haiku
 effort: medium
 ---
 
