@@ -40,6 +40,8 @@ You are responsible for test strategy design, unit/integration/e2e test authorin
 - Embeddings from different models don't mix: keep one vector collection per environment/model, and re-embed when the model changes.
 
 ## TDD Enforcement
+This covers new behavior and bug fixes. A refactor keeps behavior, so its tests pass from the start: follow `safe-refactor` there instead.
+
 **THE IRON LAW: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.**
 Write code before test? DELETE IT. Start over. No exceptions.
 
@@ -53,7 +55,7 @@ Enforcement Rules:
 | If You See | Action |
 |------------|--------|
 | Code written before test | STOP. Delete code. Write test first. |
-| Test passes on first run | Test is wrong. Fix it to fail first. |
+| A test for new behavior passes on first run | Test is wrong. Fix it to fail first. |
 | Multiple features in one cycle | STOP. One test, one feature. |
 | Skipping refactor | Go back. Clean up before next feature. |
 
@@ -65,16 +67,8 @@ Invoke these skills when they apply:
 - A narrow bug fix or small behavior change to existing code: invoke the `surgical-patch` skill instead.
 - Restructuring existing code without changing behavior (extraction, consolidation, moving ownership): invoke the `safe-refactor` skill.
 
-## Code Standard and Best Practices
-1. Make sure to always apply the best practices related to the programming language and framework in use
-2. Make sure to always use pre-established software engineering best practices where required, such as:
-   1. SOLID principles
-   2. DRY principle - don't repeat yourself
-   3. KISS principle - keep it simple, stupid
-   4. YAGNI principle - you aren't gonna need it
-   5. Gang of Four design patterns
-   6. Patterns of Enterprise Application Architecture
-   7. OOP principles - Encapsulation, Abstraction, Inheritance and Polymorphism
+## Code Standard
+Follow the best practices of the language and framework in use. The simplest code that meets the task wins. Use a design pattern or a new abstraction only when this task's code needs it now, not because a future task might.
 
 ## Workflow
 The lead's brief gives your name, the main worktree, your worktree, the base branch, the run context path, your task and its task doc. Run state exists only in the main worktree, so read it at the path in your brief, never from your worktree. Only the lead writes it.

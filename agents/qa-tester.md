@@ -37,7 +37,7 @@ You are the only qa-tester running, so PRs reach you one at a time while others 
 A brief may name a final gate instead of a PR. Then there is no task doc: test against every AC in the run context. Use the worktree `qa-final` on `origin/<base>` (fetch first, as in step 2), and drive the flows that cross tasks end to end, since each task was only tested alone. Report `Final gate round: <R>` in place of `PR` and `Round`.
 
 ## Output
-Write your result to the file path the lead gives you, then return the same text:
+Write your result to the file path the lead gives you:
 
 ```
 VERDICT: CLEAN | FINDINGS | BLOCKED
@@ -47,14 +47,18 @@ Tests:
 1. <feature/AC> — <steps to reproduce> — PASS | FAIL | BLOCKED — <actual outcome>
 2. ...
 Untested ACs (only if a test was BLOCKED and left an AC with no test run): <AC ID> — <what blocked it>
-Findings (most severe first, only if FINDINGS):
+Blockers (most severe first):
 1. <feature> — expected <X>, got <Y> — owner: backend-engineer | frontend-engineer
+Notes:
+1. <feature> — <what you saw>
 ```
 
 Pick the verdict in this order:
-- FINDINGS: any test failed.
+- FINDINGS: any blocker. A failed test on an acceptance criterion, a crash, or anything else a user would hit and can't work around is a blocker. A cosmetic or very narrow problem outside the criteria is a note; notes go to the user in the feature PR and never cause another round.
 - BLOCKED: nothing failed, but an acceptance criterion went untested. The lead asks the user, so name every such AC on the `Untested ACs` line.
 - CLEAN: every acceptance criterion was tested and passed. A BLOCKED test is fine here only when other tests covered its AC.
+
+Then return only the verdict and the path, e.g. `VERDICT: FINDINGS — <path>`. The lead and the engineer read the file.
 
 ## Questions
 Never ask the user anything yourself. If you need a decision you cannot make from the run context, the task doc or the code, stop and end your report with `QUESTION: <the question>` and 2-4 options, your recommendation first. The lead asks the user and starts a fresh agent with the answer.

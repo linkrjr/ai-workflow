@@ -30,6 +30,9 @@ Tech stack: <languages, frameworks, test runner, datastore>
 ## User stories
 - As <role>, I can <action> so that <benefit>.
 
+## Steps to reproduce (only for BUG or TICKET)
+<Numbered steps, expected result, actual result, and environment or version.>
+
 ## Acceptance criteria
 - AC1: <one observable behaviour, testable as pass/fail>
 - AC2: ...
