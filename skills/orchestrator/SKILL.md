@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), splits the spec into the smallest independent tasks, files them as Linear tickets or intent files (the user chooses), asks the user whether to run designer when the spec has a user-facing surface (rendering a storyboard image, optionally uploaded to Figma), runs backend-engineer and frontend-engineer in parallel worktrees with one PR per task against a feature branch, always runs code-reviewer and qa-tester on every PR, merges clean PRs into the feature branch once their CI passes, runs both gates once more on the merged result against every AC, then has writer document the result (and update openapi.yaml when public endpoints changed) and opens one feature PR for the user to review and merge. Never merges into the default branch. Re-running it on a reviewed feature PR turns the PR's comments into fix tasks. Optional Jev signals (needs TYPESAFE_API_KEY and a .jev-enabled file in the repo) triage PRs, flag review loops that stop converging, and check the spec; they never replace a gate. Use after /workshop with the spec path, e.g. /orchestrator docs/specs/<slug>.md.
+description: Implement an approved spec doc with a team of subagents. This session acts as lead, runs ticket-reviewer first for BUG/TICKET specs (and stops if it can't reproduce the issue), splits the spec into tasks of one behavior each, files them as Linear tickets or intent files (the user chooses), asks the user whether to run designer when the spec has a user-facing surface (rendering a storyboard image, optionally uploaded to Figma), runs backend-engineer and frontend-engineer in parallel worktrees with one PR per task against a feature branch, always runs code-reviewer and qa-tester on every PR, merges clean PRs into the feature branch once their CI passes, runs both gates once more on the merged result against every AC, then has writer document the result (and update openapi.yaml when public endpoints changed) and opens one feature PR for the user to review and merge. Never merges into the default branch. Re-running it on a reviewed feature PR turns the PR's comments into fix tasks. Optional Jev signals (needs TYPESAFE_API_KEY and a .jev-enabled file in the repo) triage PRs, flag review loops that stop converging, and check the spec; they never replace a gate. Use after /workshop with the spec path, e.g. /orchestrator docs/specs/<slug>.md.
 model: Opus
 effort: medium
 ---
@@ -25,8 +25,8 @@ Start every run by looking for `<state>/state.md`:
 
 ## Agent hygiene: never leave one idle
 Idle agents still burn tokens while they wait.
-- Engineers are workers: each one owns a worktree and takes task after task. When an engineer submits a PR, give it its next piece of work right away with SendMessage (see section 5). If there is no unblocked task for it, stop it with `TaskStop(task_id=<its name>)` — don't keep it alive in case a task unblocks later; spawn a fresh engineer then.
-- `code-reviewer` and `qa-tester` are workers too, but only one of each runs at a time: each works through its queue one PR after another (see section 5) and is stopped once its queue is empty.
+- Each task gets its own engineer and worktree, and that engineer does only that task and its fixes. So a fix never waits on an engineer busy with other work, and no agent carries one task's context into the next.
+- Each PR gets its own `code-reviewer` and `qa-tester`, at most 3 of each at a time (see section 5). They come back for that PR's later rounds, since they already know it, and for nothing else.
 - Every other agent (ticket-reviewer, designer, writer) is stopped the moment its report is captured.
 - A fresh agent loses nothing: `<state>/context.md` and the task doc carry all the context it needs.
 
@@ -76,7 +76,7 @@ When the whole run is done (section 7, right after you set `Done`), send one not
 4. Set up the feature branch, before any other work — see "1d. Feature branch" below.
 5. Set up the codebase graph — see "1c. Codebase graph" below.
 6. Note the main worktree (`git rev-parse --show-toplevel`), the base branch (the feature branch from 1d), the default branch (also from 1d) and the base commit (`git rev-parse HEAD`).
-7. Read enough of the codebase to know which layers change. Check; do not assume. With a graph, start from `graphify query "<what the spec changes>"` and `graphify affected "<symbol or file>"`, then read the files it points to. Note the backend project's root when the repo holds more than one project (e.g. `apps/api` next to `apps/web`).
+7. Read enough of the codebase to know which layers change. Check; do not assume. With a graph, start from `graphify query "<what the spec changes>"` and `graphify affected "<symbol or file>"`, then read the files it points to. Note the backend project's root when the repo holds more than one project (e.g. `apps/api` next to `apps/web`). Note how a fresh worktree becomes runnable: the install command from the lockfile, and any gitignored env files to copy (`git ls-files --others --ignored --exclude-standard | grep -E '(^|/)\.env'`).
 8. Split the spec into tasks — see "1b. Split into tasks" below.
 9. Write `<state>/context.md`:
    - Spec path, main worktree path, base branch (the feature branch) and base commit
@@ -84,6 +84,7 @@ When the whole run is done (section 7, right after you set `Done`), send one not
    - Spec type (FEATURE / BUG / TICKET / TECH_DEBT); if BUG or TICKET, link `<state>/ticket-review.md`
    - Tech stack, copied from the spec
    - `Backend project: <path>` (the repo root when there is only one project)
+   - `Worktree setup: <install command, or none>; copy from the main worktree: <env files, or none>`
    - `Graph: <main worktree>/graphify-out/graph.json`, or `Graph: none` (from 1c)
    - Acceptance criteria, copied verbatim (AC1, AC2, ...)
    - Files and areas in scope; areas out of scope
@@ -93,8 +94,8 @@ When the whole run is done (section 7, right after you set `Done`), send one not
 10. Write `<state>/state.md`:
    - `Feature PR: none` (section 7 fills it in)
    - `Accepted untested: none` (section 5 step 7 fills it in)
-   - Task list: one line per task — ID, task name, the AC IDs it covers, owner role, `depends on:` (task IDs, or `none`), the task doc reference (filled in by section 2), engineer, PR and status, e.g. `T2 Add rate limiter — AC1, AC3 — owner: backend-engineer — depends on: T1 — intent: intent/2026-10-26-add-rate-limiter.md — engineer: be-1 — PR: #12 — status: in-review`
-   - Status values: `todo` → `in-progress` → `in-review` → `changes-requested` (back to `in-review` when fixed) → `approved` → `merged`
+   - Task list: one line per task — ID, task name, the AC IDs it covers, owner role, `depends on:` (task IDs, or `none`), the task doc reference (filled in by section 2), engineer, PR and status, e.g. `T2 Add rate limiter — AC1, AC3 — owner: backend-engineer — depends on: T1 — intent: intent/2026-10-26-add-rate-limiter.md — engineer: t2 — PR: #12 — status: in-review`
+   - Status values: `todo` → `in-progress` → `in-review` → `changes-requested` (back to `in-review` when fixed) → `approved` → `merged`; `stopped` if the user stops the task
 
 ### 1a. Verify reproduction (BUG / TICKET specs only)
 1. If `<state>/ticket-review.md` already exists and its latest `STATUS:` line says `REPRODUCED` or `PARTIAL`, reuse it and handle that status as in step 3 — do not re-run `ticket-reviewer`.
@@ -107,12 +108,14 @@ When the whole run is done (section 7, right after you set `Done`), send one not
    - For either stop: do not write `context.md` or `state.md`, do not create tasks, and do not spawn any engineer. Nothing has been implemented or reviewed yet, so do not use section 7's format or its "go back to section 5" check — report now, verbatim from `ticket-reviewer`'s output: `STATUS`, `Ticket`, `Steps tried`, `Evidence`, `Notes`, plus a one-line explanation (per the distinction above) of why this status means the pipeline can't continue yet. Wait for the user's next instruction before touching this spec again.
 
 ### 1b. Split into tasks
-Make every task as small as it can be while still being worked, reviewed and merged in isolation:
-- One layer (backend or frontend), one behavior: typically one endpoint, one model change, one component or one flow step, plus its tests.
+Size each task as one behavior within one role, so it can be worked, reviewed and merged in isolation. Review and QA run once per task, so a task with no behavior of its own to test is too small:
+- One role (backend or frontend), one behavior, with everything it takes: "migration, endpoint and tests" is one backend task, and the UI for it is a separate frontend task.
 - Each task leaves the base branch working when merged on its own.
-- Each AC is covered by at least one task; a task may cover part of an AC.
-- Write down real dependencies only: a task depends on another when it needs that task's code merged first (e.g. a frontend task that calls a new endpoint depends on the endpoint task). Tasks without a dependency between them can run in parallel, so don't chain tasks that don't need it.
-- Specs scoped from an audit (they have a "Findings in scope" table): one task per finding, carrying its ID, `file:line` and recommendation into the task doc. Findings that touch the same file go in one task, so their PRs don't conflict.
+- Each AC is covered by at least one task; a task may cover part of an AC. The final gate (5a) checks the whole AC.
+- Write down real dependencies only: a task depends on another when it needs that task's code merged first. A frontend task does not depend on the endpoint it calls: it builds against the API contract, and the final gate tests the two together. Tasks without a dependency between them run in parallel, so don't chain tasks that don't need it.
+- Shared foundations that several behaviors need (a migration, an auth change) go first as their own task. Cross-cutting changes (a library swap) don't split by behavior.
+- List the files each task will likely touch, then compare the lists. Tasks that share a file conflict when they run in parallel, and a rebase re-runs both gates, so merge them into one task or chain them with `depends on:`.
+- Specs scoped from an audit (they have a "Findings in scope" table): one task per finding, carrying its ID, `file:line` and recommendation into the task doc. Findings that touch the same file go in one task.
 
 ### 1c. Codebase graph (graphify)
 A graphify knowledge graph maps the codebase's files, symbols and how they connect. Every agent here starts cold and would otherwise re-read files to find its way; with the graph it asks `graphify query`, `explain`, `path` or `affected` instead and reads only what the answer points to. That saves tokens on every agent and catches callers a grep would miss.
@@ -208,33 +211,31 @@ You do this yourself: subagents can't reach the user's MCP login.
 
 ## 4. Implement
 1. A task is unblocked when its status is `todo` and every task in its `depends on:` is `merged`. You merge every task PR into the feature branch (section 5, step 6); engineers never do.
-2. Start one engineer per unblocked task, all in a single message so they run in parallel — `backend-engineer` for backend tasks, `frontend-engineer` for frontend tasks (Agent tool, `subagent_type` = the agent name). Give each a unique `name` (`be-1`, `be-2`, `fe-1`, ...). Never start more engineers than there are unblocked tasks.
+2. Start one engineer per unblocked task, all in a single message so they run in parallel — `backend-engineer` for backend tasks, `frontend-engineer` for frontend tasks (Agent tool, `subagent_type` = the agent name). Its `name` is the task ID in lowercase (`t2`).
 3. Brief: "Your name: <name>. Main worktree: <path>. Your worktree: <main worktree parent>/<repo name>.worktrees/<name>. Base branch: <base>. Read <state>/context.md first. Your task: <task ID>. Task doc: <its intent path or Linear identifier>." Set the task's `engineer:` to that name and its status to `in-progress` (and the intent file's status, when using intent files; for Linear the ticket is already "in progress").
-4. When an engineer reports a PR, append `— PR: #<n>` to its task line, set the status to `in-review` (intent file too), and queue it for review and QA (section 5). Then give that engineer its next work with SendMessage, in this order:
-   - a PR of its own with `changes-requested` → "Fix PR #<n>: <findings file paths>."
-   - otherwise an unblocked task → "Next task: <task ID>. Task doc: <its intent path or Linear identifier>." (it updates its worktree from the base first, by its own rules)
-   - otherwise nothing → stop it with `TaskStop`.
-5. When a task unblocks (a dependency merged) and no running engineer of that role is free, spawn a fresh one for it as in steps 2-3.
-6. A PR with `changes-requested` whose engineer was stopped: spawn a fresh engineer of that role with the same name and worktree, briefed: "... Fix PR #<n> for task <task ID>: <findings file paths>."
+4. When an engineer reports a PR, append `— PR: #<n>` to its task line, set the status to `in-review` (intent file too), and queue it for review and QA (section 5). That engineer's next work, if any, is a fix to this PR.
+5. When a task unblocks (a dependency merged), start its engineer as in steps 2-3.
+6. A PR with `changes-requested`: SendMessage its engineer "Fix PR #<n>: <findings file paths>." If it can't be reached, spawn a fresh engineer of that role with the same name and worktree, briefed: "... Fix PR #<n> for task <task ID>: <findings file paths>."
 
 ## 5. Review and QA (mandatory, every PR, no exceptions)
-There is exactly one `code-reviewer` and one `qa-tester` at a time, each with its own queue. PRs wait in line when engineers submit faster than they can be checked.
+At most 3 `code-reviewer` and 3 `qa-tester` agents run at a time, each on one PR, with its own queue. PRs wait in line when engineers submit faster than that.
 1. Queues: keep `Review queue:` and `QA queue:` lines in `state.md`, oldest first, each entry `#<n> (task <task ID>, round <N>)`. Round N starts at 1 and goes up by one each time the engineer pushes a fix. When a PR is submitted or a fix is pushed, add it to the end of both queues.
 2. Triage. When a PR enters the review queue, run `gh pr diff <n> | ${CLAUDE_PLUGIN_ROOT}/skills/jev/scripts/jev.sh triage > <state>/jev-pr-<n>-round-<N>.md` (the `jev` skill). Triage only directs attention, it never shortens a review: every PR still gets the full `code-reviewer` and `qa-tester` pass. Use it for two things: when picking the next entry from either queue, take a PR with `JEV VERDICT: ATTENTION` before a `NO SIGNALS` one of equal age (oldest first otherwise), and tell `code-reviewer` about the flags (see its brief below). An empty file, or one saying `UNAVAILABLE`, means no triage; skip it.
-3. Hand out work. Whenever a queue has entries and its agent is free, give it the first entry and take that entry off the queue. If its agent isn't running, spawn it (Agent tool, `name` = `code-reviewer` / `qa-tester`); if it is running and free, send the entry with SendMessage. The two agents are independent (one reads the diff, the other runs the app), so they work on different PRs at the same time:
+3. Hand out work. Whenever a queue has entries and fewer than 3 of its agents are working, take the first entry off the queue. Round 1 gets a fresh agent (Agent tool, `name` = `review-pr-<n>` / `qa-pr-<n>`). A later round goes to that PR's agent with SendMessage; if it can't be reached, spawn a fresh one with the full brief. The two gates are independent (one reads the diff, the other runs the app), so they can work on different PRs at the same time:
    - `code-reviewer`: "Read <state>/context.md. Review PR #<n> for task <task ID>. Task doc: <its intent path or Linear identifier>. This is round <N>. Write your result to <state>/review-pr-<n>-round-<N>.md." It returns one line with its verdict and the path, so read the file only when you need more. When the triage file has signals (it is not empty and not `UNAVAILABLE`), append: "Jev triage is at <state>/jev-pr-<n>-round-<N>.md; give extra attention to the areas it flags."
    - `qa-tester`: "Read <state>/context.md. QA test PR #<n> for task <task ID> end to end. Task doc: <its intent path or Linear identifier>. This is round <N>. Write your result to <state>/qa-pr-<n>-round-<N>.md."
-4. Each report covers one PR and comes back to you as soon as that PR is done. Act on it (steps 5-6), then hand that agent its next queue entry right away. If its queue is empty, stop it with `TaskStop`; spawn it again when a new entry arrives.
-5. A report says FINDINGS (at least one blocker; notes alone never make a round) → set the task to `changes-requested` and route the fix to the PR's engineer (section 4, steps 4 and 6). If that PR's round is still waiting in the other queue, take it off: the fix starts a new round anyway. When the fix is pushed, set the task back to `in-review` and queue round N + 1 in both queues. There is no round limit, but a loop that is not converging goes to the user: from round 2 on, run `${CLAUDE_PLUGIN_ROOT}/skills/jev/scripts/jev.sh loop-guard <state>/review-pr-<n>-round-<N-1>.md <state>/review-pr-<n>-round-<N>.md` (and the same for the `qa-pr-` files) before routing the fix. On `JEV VERDICT: STALLED`, ask the user before routing the fix, with the question tool: "Keep looping" (Recommended) / "Revise the task or spec" / "Stop this task", the Jev signals in the description. Route the fix only on "Keep looping". `PROGRESSING` or `UNAVAILABLE` changes nothing: route the fix as usual.
+   - From round 2 on, add to either brief: "Your earlier reports: <paths, including any late one (see "When things go wrong")>. Check only what those reports and this fix touch." Both gates still run; the final gate covers the rest.
+4. Each report covers one PR and comes back to you as soon as that PR is done. Act on it (steps 5-7), then hand out the next queue entry right away.
+5. A report says FINDINGS (at least one blocker; notes alone never make a round) → set the task to `changes-requested` and route the fix to the PR's engineer (section 4, step 6). If that PR's round is still waiting in the other queue, take it off: the fix starts a new round anyway. When the fix is pushed, set the task back to `in-review` and queue round N + 1 in both queues. There is no round limit, but a loop that is not converging goes to the user: from round 2 on, run `${CLAUDE_PLUGIN_ROOT}/skills/jev/scripts/jev.sh loop-guard <state>/review-pr-<n>-round-<N-1>.md <state>/review-pr-<n>-round-<N>.md` (and the same for the `qa-pr-` files) before routing the fix. On `JEV VERDICT: STALLED`, ask the user before routing the fix, with the question tool: "Keep looping" (Recommended) / "Revise the task or spec" / "Stop this task", the Jev signals in the description. Route the fix only on "Keep looping". `PROGRESSING` or `UNAVAILABLE` changes nothing: route the fix as usual.
 6. Both reports for the same round say `VERDICT: CLEAN` (a QA report counts once step 7 clears it) → set the task to `approved`, then merge it into the feature branch (every task PR's base), from the main worktree:
    1. Wait for CI: `gh pr checks <n> --watch --fail-fast`, in the background (`run_in_background`) so other reports keep moving. Exit 0 → go on. It prints `no checks reported` → this branch has no CI; go on, and say so once in the report. Anything else is a failure: set the task to `changes-requested` and route "Fix PR #<n>: CI failed: <failing check names and links>." to its engineer as in step 5. The fix is a new round in both queues.
    2. `gh pr merge <n> --squash --delete-branch`. It deletes the remote branch, and the local one unless an engineer's worktree has it checked out (section 7 cleans those up).
    3. If the merge fails on a conflict, set the task to `changes-requested` and route "Fix PR #<n>: merge conflict with <base>, rebase and push." to its engineer as in step 5. The rebased push is a new round in both queues; a rebase is code the gates haven't seen.
-   4. `git pull --ff-only` in the main worktree (and `graphify update .` when there is a graph), then set the task to `merged` (intent file status `done`). Tasks that depended on it may now be unblocked (section 4, step 5).
+   4. `git worktree remove --force <its worktree>`, then `git pull --ff-only` in the main worktree (and `graphify update .` when there is a graph), then set the task to `merged` (intent file status `done`). Tasks that depended on it may now be unblocked (section 4, step 5).
 7. A QA report says `VERDICT: BLOCKED` → an AC went untested, which is not a pass. If the PR is already `changes-requested`, do nothing: the next round tests it again. If every AC on its `Untested ACs:` line is already on the `Accepted untested:` line in `state.md`, the report counts as `CLEAN`. Otherwise ask the user, naming each AC and why it was blocked: "I've cleared the blocker" (Recommended) / "Accept untested". On "I've cleared the blocker", put this round back at the front of the QA queue. On "Accept untested", add those ACs to the `Accepted untested:` line, and the report counts as `CLEAN`.
 
 ### 5a. Final gate: the merged result
-The gates above saw each task alone, and a task may cover only part of an AC, so nothing yet shows that the merged whole works. Once every task in `state.md` is `merged` and both queues are empty, check it once more against every AC. A resumed run in that state comes straight here.
+The gates above saw each task alone, and a task may cover only part of an AC, so nothing yet shows that the merged whole works. Once every task in `state.md` is `merged` or `stopped` and both queues are empty, check it once more against every AC. A resumed run in that state comes straight here.
 1. Run `git pull --ff-only` in the main worktree. The round R is one past the highest round with both a `final-review-round-<R>.md` and a `final-qa-round-<R>.md` in `<state>`, so a round you stopped just runs again.
 2. Spawn a fresh `code-reviewer` and `qa-tester` in a single message:
    - `code-reviewer`: "Read <state>/context.md. Final gate, round <R>: review <base> since <base commit> against every AC. Write your result to <state>/final-review-round-<R>.md."
@@ -244,12 +245,12 @@ The gates above saw each task alone, and a task may cover only part of an AC, so
 5. Both say `VERDICT: CLEAN` → section 6.
 
 ## 6. Document
-Only after the final gate is clean (every engineer, code-reviewer, and qa-tester agent should already be stopped per the agent hygiene rule above — if any is still running, stop it first): run `git pull --ff-only` in the main worktree, then spawn `writer` alone, with: "Read <state>/context.md. Implementation is complete, reviewed clean, QA passed and merged. Update README/API docs/comments for the files changed since <base commit>."
+Only after the final gate is clean (if an agent is still working, stop it first): run `git pull --ff-only` in the main worktree, then spawn `writer` alone, with: "Read <state>/context.md. Implementation is complete, reviewed clean, QA passed and merged. Update README/API docs/comments for the files changed since <base commit>."
 When the API contract in `context.md` adds, changes or removes an externally exposed endpoint (anything but internal or admin routes), append: "Public endpoints changed: invoke the `openapi` skill for the backend project at <Backend project path>."
 Wait for it to report, then stop it. Do not run `writer` in parallel with any other agent, and do not run it before every task is merged — it documents the shipped code, not work in progress.
 
 ## 7. Report
-Before you report, confirm that every task line in `state.md` is `merged`, that for each PR the latest `<state>/review-pr-<n>-round-<N>.md` and `<state>/qa-pr-<n>-round-<N>.md` both say `VERDICT: CLEAN` from the same round, and that the latest `final-review-round-<R>.md` and `final-qa-round-<R>.md` do too. A QA `VERDICT: BLOCKED` counts only when every AC it lists is on the `Accepted untested:` line. If not, you are not done: go back to section 4, 5 or 5a.
+Before you report, confirm that every task line in `state.md` is `merged` or `stopped`, that for every merged task the latest `<state>/review-pr-<n>-round-<N>.md` and `<state>/qa-pr-<n>-round-<N>.md` both say `VERDICT: CLEAN` from the same round, and that the latest `final-review-round-<R>.md` and `final-qa-round-<R>.md` do too. A QA `VERDICT: BLOCKED` counts only when every AC it lists is on the `Accepted untested:` line. If not, you are not done: go back to section 4, 5 or 5a.
 
 Close out the tasks. With Linear: for each task line with a `linear:` identifier, call `${CLAUDE_PLUGIN_ROOT}/skills/linear/scripts/linear.sh set-state <IDENTIFIER> <TEAM_KEY> completed`. With intent files: check every intent file says `status: done`. Do this for all of them before reporting to the user — a task left open after the work is merged is stale state, not a minor detail.
 
@@ -282,6 +283,13 @@ Then tell the user:
 - Steps the user can follow to try the feature
 
 If the work must pause, invoke the `handoff` skill before you stop.
+
+## When things go wrong
+- **An agent crashes, or ends without a report:** spawn a fresh one with the same name and worktree, told "your worktree has the work in progress". If that one fails too, ask the user: "Retry" (Recommended) / "Stop this task".
+- **An engineer says the API contract must change:** ask the user, naming the change and which tasks it affects: "Change the contract" (Recommended) / "Keep it, and <engineer's fallback>". On a change, edit the contract in `context.md`, SendMessage the running engineers it affects, and route a fix to any PR already built on the old shape.
+- **An engineer reports `DISPUTE: <finding>: <why>` instead of fixing it:** send that argument to the agent that raised the finding. If it withdraws, it rewrites its report. If it stands, ask the user: "Engineer fixes it" (Recommended) / "Drop the finding". On "Drop", mark the finding `dropped by user` in the report, and if no blocker is left change its verdict to `VERDICT: CLEAN`. A dispute with no push isn't a new round.
+- **A report arrives for an older round:** a gate may still be running when the other's findings start a fix. If the fix isn't pushed yet, forward the report's blockers to the same engineer, with no extra round. If it is, don't route or queue anything: pass the report to that gate's next-round brief, so its blockers get checked.
+- **The user stops a task** (here or at a stalled loop): set its status to `stopped`, and do the same for tasks that depend on it. Leave its PR open. Add a line to `context.md`: `Dropped from scope: <AC IDs> (task stopped by the user)`, so the gates skip those ACs, and name them in the feature PR and your report. Section 7 counts `stopped` like `merged`.
 
 ## Never skip code-reviewer or qa-tester
 | Thought | Reality |
