@@ -2,6 +2,16 @@
 
 Covers all 45 items in `docs/workflow-audit-2026-11-04.md`. Flaw, Speed and Tokens numbers match sections 1–3 of the audit, and "Other" means section 4. Each phase is one commit on a dedicated branch.
 
+## Progress
+
+Work is on the local branch `workflow-audit-fixes`, not pushed. Phases 1–3 are done; next is Phase 4. Nothing has been tested in a real orchestrator run yet, and CI has never run.
+
+To resume: "Continue the plan in `docs/workflow-audit-plan-2026-11-04.md` from Phase 4, on branch `workflow-audit-fixes`."
+
+Decisions made along the way:
+- **Phase 2:** an opted-in repo still sends full diffs and specs to Jev; secret scrubbing wasn't part of the decision.
+- **Phase 3:** a run started on another spec's feature branch asks before building on it. An interrupted run asks to resume or start over. The Linear team key is saved in `context.md`, which covers a small part of Flaw 16. Engineers no longer delete old branches; the lead's end-of-run cleanup does.
+
 ## Decisions
 
 | Decision | Choice |
@@ -15,15 +25,15 @@ Covers all 45 items in `docs/workflow-audit-2026-11-04.md`. Flaw, Speed and Toke
 
 ## Order
 
-1. **Repair the tooling**
+1. **Repair the tooling** (done)
    - Other: document `claude plugin test`, fix the `tsc` errors and add CI
    - Flaw 3: script paths
    - Flaw 17: `loop-guard` exit code
    - Other: `linear.sh` bugs
-2. **Close the security gaps**
+2. **Close the security gaps** (done)
    - Other: pane approvals show the full command or diff, and a double press can't approve the next request
    - Other: Jev opt-in
-3. **Make run state safe**
+3. **Make run state safe** (done)
    - Flaw 1: per-spec state folders
    - Flaw 13: the lead is the only handoff writer and handles `.gitignore`
    - Tokens 8, part 1: split stable context from live queue state
