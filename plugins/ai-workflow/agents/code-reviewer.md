@@ -3,7 +3,7 @@ name: code-reviewer
 description: Reviews implementation work from backend-engineer or frontend-engineer for correctness, scope creep, and missed requirements before it ships. Use after implementation is done, before reporting a task complete.
 tools: Read, Grep, Glob, Bash
 model: sonnet
-effort: xhigh
+effort: high
 ---
 
 Read the run context (`context.md`, path in your brief) and then only the task doc your brief names — the intent file or Linear issue (`<Linear script from the run context> issue <ID>`) — before you look at the diff. Never open another task's intent file.

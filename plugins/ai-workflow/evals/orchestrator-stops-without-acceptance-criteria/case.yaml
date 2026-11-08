@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: orchestrator-stops-without-acceptance-criteria
+description: The orchestrator's first gate. A spec without acceptance criteria goes back to /workshop, and no agent, branch or ticket is created.
+tags: [orchestrator, smoke]
+runs: 2
+context:
+  scaffold_script: scaffold.sh

@@ -4,7 +4,7 @@ import { expect, mock, test } from 'claude-code/testing'
 declare const setTimeout: (run: (value: unknown) => void, ms: number) => unknown
 
 const BAND = {
-  plugin: 'ai-workflow',
+  plugin: 'pomodoro',
   component: 'AbovePrompt',
   surface: 'terminal',
   props: { hasSurvey: false, isWorking: false, maxRows: 3, bodyColumns: 100, scroll: { offset: 0, bodyRows: 3 }, view: {} },
@@ -42,7 +42,7 @@ const boot = async (
   let reads = 0
   const broken = () =>
     isStoreBroken ? 'store unavailable'
-    : corruptFile ? `ai-workflow@inline: store file ${corruptFile} is malformed (JSON Parse error: Unexpected EOF)`
+    : corruptFile ? `pomodoro@inline: store file ${corruptFile} is malformed (JSON Parse error: Unexpected EOF)`
     : undefined
   // The file system: a write to the corrupt file heals it; every write is kept to show no other file is touched.
   const writes: { path: string; text: string }[] = []
@@ -151,7 +151,7 @@ test('AC6: a Resume that lands during a slow paused-band tick keeps the 1 s tick
   let release!: () => void
   const gate = new Promise<void>(resolve => (release = resolve))
   let isHeld = false
-  on('state.set', { plugin: 'ai-workflow', key: 'pomodoroTick' }, async (_: any, e: any, next: any) => {
+  on('state.set', { plugin: 'pomodoro', key: 'pomodoroTick' }, async (_: any, e: any, next: any) => {
     if (!isHeld) {
       isHeld = true
       await gate
@@ -357,7 +357,7 @@ test('AC11: a store that cannot be read or written counts from 0 and the timer k
   await ui.unmount()
 })
 
-const FILE = '/home/me/.claude/plugins/store/ai-workflow_inline-1a.json'
+const FILE = '/home/me/.claude/plugins/store/pomodoro_inline-1a.json'
 const CORRUPT_TOAST = "Today's Pomodoro count file is corrupt and can't be saved — use Reset count in the band to start it fresh."
 
 test('AC15: a corrupt count file toasts once per session, however many times it fails', async ($, on) => {
@@ -449,8 +449,8 @@ const foreign = (file: string) => async ($: any, on: any) => {
 
 test('AC15: an error naming a file outside the store folder writes nothing', foreign('/home/me/Documents/precious.json'))
 test('AC15: an error naming another plugin\'s store file writes nothing', foreign('/home/me/.claude/plugins/store/skins_inline-2b.json'))
-test('AC15: an error naming a non-json file in the store folder writes nothing', foreign('/home/me/.claude/plugins/store/ai-workflow_inline-1a.txt'))
-test('AC15: an error naming this plugin\'s file name in another folder writes nothing', foreign('/home/me/.claude/notes/ai-workflow_inline-1a.json'))
+test('AC15: an error naming a non-json file in the store folder writes nothing', foreign('/home/me/.claude/plugins/store/pomodoro_inline-1a.txt'))
+test('AC15: an error naming this plugin\'s file name in another folder writes nothing', foreign('/home/me/.claude/notes/pomodoro_inline-1a.json'))
 
 // A second `session.start` mid-phase (what a reload runs) keeps the stored phase: the running phase
 // keeps its stored end, still ticks and still transitions. The kit cannot swap `options` mid-test, so
@@ -500,39 +500,23 @@ test('AC13: a missing, fractional or out-of-range setting falls back to its defa
 // The Buttons of the band, top to bottom.
 const buttons = async (ui: any) => (await ui.findAll({ type: 'Button' })).map((b: any) => b.key)
 
-test('AC14: the agent teams open button stays first, the Pomodoro row below it', { options: { alwaysOn: false } }, async ($, on) => {
+test('AC14: another plugin\'s band row stays first, the Pomodoro row below it', async ($, on) => {
+  // Another plugin's row that keeps the band beneath (e.g. the agent teams open button), drawn
+  // the same whichever of the two hooks the engine puts outside the other.
+  on('ui.render', { component: 'AbovePrompt' }, async ($: any, e: any, next: any) => {
+    const { Box, Button } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="column">
+        <Button key="other-row" label="other" onPress={() => {}} />
+        {await next(e)}
+      </Box>
+    )
+  })
   await boot($, on)
   await run($)
   const ui = await $.ui.mount(BAND)
-  expect(await buttons(ui)).toEqual(['open-pane', 'pomodoro-pause', 'pomodoro-stop'])
+  expect(await buttons(ui)).toEqual(['other-row', 'pomodoro-pause', 'pomodoro-stop'])
   await ui.unmount()
-})
-
-test('AC14: a Proceed / Cancel ask stays first, the Pomodoro row below it', async ($, on) => {
-  on('tool.check', () => ({ decision: 'ask' as const }))
-  // The ask's wait: ends only when the answer kills it.
-  on('process.spawn', async function* (_: any, __: any, next: any) {
-    await new Promise<void>(resolve => next.signal.addEventListener('abort', () => resolve()))
-    return { value: { code: null, signal: 'SIGTERM' } }
-  })
-  let stored!: () => void
-  const isStored = new Promise<void>(resolve => (stored = resolve))
-  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_: any, e: any, next: any) => {
-    if (e.value.some((a: any) => a.isAnswerable)) stored()
-    return next(e)
-  })
-  const { clock } = await boot($, on)
-  await run($)
-  const verdict = $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't1', approver: 'person' })
-  await isStored
-
-  const ui = await $.ui.mount(BAND)
-  expect(await buttons(ui)).toEqual(['band-proceed-t1', 'band-cancel-t1', 'pomodoro-pause', 'pomodoro-stop'])
-  expect((await ui.find({ type: 'Text', text: /^⚠/ }))?.text).toBe('⚠ Leader wants Bash: git push  ')
-  await clock.advance(5000)
-  await ui.press({ key: 'band-cancel-t1' })
-  await ui.unmount()
-  expect((await verdict).decision).toBe('deny')
 })
 
 test('AC4, AC5: the ring plays with the toast at the end of a pomodoro and of a break', async ($, on) => {

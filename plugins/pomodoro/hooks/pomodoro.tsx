@@ -4,9 +4,9 @@ import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 import type { Pomodoro } from '../types'
 
 const IDLE: Pomodoro = { phase: 'idle', position: 1, total: 4 }
-const pomodoro = atom({ plugin: 'ai-workflow', key: 'pomodoro' } as const, IDLE)
+const pomodoro = atom({ plugin: 'pomodoro', key: 'pomodoro' } as const, IDLE)
 // Bumped every second while a phase runs, so the countdown redraws.
-const tick = atom({ plugin: 'ai-workflow', key: 'pomodoroTick' } as const, 0)
+const tick = atom({ plugin: 'pomodoro', key: 'pomodoroTick' } as const, 0)
 
 const MINUTE = 60_000
 
@@ -211,7 +211,7 @@ export async function openPomodoro($: EngineInterface, c: Config) {
     await $.command.register({ name: 'pomodoro', description: 'Start a Pomodoro, or show where the timer is' })
     await syncTicker($, c)
   } catch {
-    // the timer must never keep the agent teams pane from opening (the same hook)
+    // a failure here must never break the session start beneath
   }
 }
 
@@ -221,7 +221,7 @@ export async function closePomodoro($: EngineInterface) {
   try {
     await stop($)
   } catch {
-    // the timer must never keep the agent teams pane from opening or closing (the same hooks)
+    // a failure here must never break the session start or end beneath
   }
 }
 

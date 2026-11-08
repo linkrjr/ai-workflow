@@ -12,11 +12,13 @@
 
 ## Codebase Purpose
 
-This repo is a Claude Code plugin, `ai-workflow` (`.claude-plugin/plugin.json`), and the marketplace that hosts it (`.claude-plugin/marketplace.json`) — the repo root is the plugin root, same layout as `mattpocock/skills`. It's meant to be published: installed by adding this GitHub repository as a marketplace (`plugin.json`'s `homepage`/`repository` fields point at it), not just run locally out of a clone. It exposes two slash commands that together turn a feature idea into shipped, reviewed, documented code: `/workshop` interviews the user into an approved spec, and `/orchestrator` runs that spec through a lead-and-subagents pipeline (design, implementation, mandatory review, documentation). It also has a third, `/pomodoro`, a timer that is separate from that pipeline (see [Pomodoro timer](#pomodoro-timer)). It produces no runtime service — its "output" is code changes made elsewhere in whatever repo it's invoked in, plus the spec and coordination files it writes under `docs/specs/` and `tmp/team/`.
+This repo is a Claude Code marketplace (`.claude-plugin/marketplace.json`) hosting two plugins. This README covers `ai-workflow`, in `plugins/ai-workflow/`. Paths below such as `agents/`, `skills/`, `hooks/` and `.claude-plugin/plugin.json` are relative to that folder, except `docs/` and `.claude-plugin/marketplace.json`, which are at the repo root. It's meant to be published: installed by adding this GitHub repository as a marketplace (`plugin.json`'s `homepage`/`repository` fields point at it), not just run locally out of a clone. It exposes two slash commands that together turn a feature idea into shipped, reviewed, documented code: `/workshop` interviews the user into an approved spec, and `/orchestrator` runs that spec through a lead-and-subagents pipeline (design, implementation, mandatory review, documentation). The same marketplace also hosts a separate `pomodoro` plugin (`plugins/pomodoro/`), a timer unrelated to the pipeline. It produces no runtime service — its "output" is code changes made elsewhere in whatever repo it's invoked in, plus the spec and coordination files it writes under `docs/specs/` and `tmp/team/`.
 
 ---
 
 ## Setup & Prerequisites
+
+**Upgrading from 1.4:** `/pomodoro` moved to its own plugin. Run `/plugin install pomodoro@ai-workflow` to keep it, and set its options again in `/config`. Run state is now kept per spec in `tmp/team/<spec slug>/`, so a run started on 1.4 can't be resumed.
 
 This plugin does not declare its external skill dependencies in `plugin.json` — Claude Code's plugin manifest schema has no `dependencies` field to put them in, so this is enforced by convention, not tooling. Before running `/orchestrator`, install these or the steps that use them silently degrade (the `Skill(...)` call just doesn't resolve — no error, the agent skips the discipline and moves on). The engineers, `qa-tester` and `ticket-reviewer` preload theirs through the `skills:` frontmatter field instead of carrying the `Skill` tool, which keeps the full skill listing (about 9k tokens on this machine) out of every spawn; a missing preloaded skill is skipped with only a debug-log warning:
 
@@ -28,7 +30,7 @@ This plugin does not declare its external skill dependencies in `plugin.json` �
 | `jev` (this plugin's own skill, `skills/jev/`) | `skills/workshop/SKILL.md`, `skills/orchestrator/SKILL.md` | Optional, and off by default because it sends diffs and specs to TypeSafe. Needs `TYPESAFE_API_KEY` (early access, console.typesafe.ai/keys), a `.jev-enabled` file at the target repo's root, plus `curl` and `jq`. Without both the key and the file every Jev step prints `UNAVAILABLE` and the pipeline runs exactly as before. |
 | `run`, `pinchtab` | `agents/qa-tester.md` (`pinchtab` also `agents/ticket-reviewer.md`) | `run` and `pinchtab` are personal skills-dir symlinks, same as the row above. `pinchtab` drives UI workflows end to end; without it, UI surfaces are reported `BLOCKED` instead of tested. |
 
-**Verify before running a task:** confirm each bare skill name above resolves on your machine (e.g. it's listed when Claude Code loads skills, or symlinked under your skills directory). If `tdd`, `surgical-patch`, `safe-refactor`, `writing-for-agents`, `handoff`, or `pr` aren't available, either install an equivalent under that exact bare name, or accept that the corresponding engineering discipline (TDD, surgical patching, doc cleanup) will be silently skipped for this run.
+**Preflight:** at the start of every run, `/orchestrator` checks for `git`, `gh`, `jq`, `curl` and each bare skill name above. It names anything missing and what that costs, then asks whether to continue without it or stop. To fix a missing skill, install an equivalent under that exact bare name.
 
 ---
 
@@ -37,13 +39,16 @@ This plugin does not declare its external skill dependencies in `plugin.json` �
 There is no `package.json`, so `bun test` can't find the engine's test kit. Run these instead; CI (`.github/workflows/ci.yml`) runs all but the type check:
 
 ```sh
+claude plugin validate .                     # the marketplace, from the repo root
+cd plugins/ai-workflow                       # the rest from the plugin folder
 claude plugin validate .                     # manifests
-claude plugin test                           # tests/*.test.tsx, needs the engine's test kit
+claude plugin test .                         # tests/*.test.tsx, needs the engine's test kit
+claude plugin test ../pomodoro               # the separate pomodoro plugin
 bash skills/jev/scripts/test_jev.sh          # stubbed curl, no network
 bash skills/linear/scripts/test_linear.sh    # stubbed curl, no network
 bash skills/orchestrator/scripts/test_cleanup.sh  # local git remote, stubbed gh
 bash skills/orchestrator/scripts/test_status.sh   # stubbed cmux and Linear
-bunx tsc --noEmit                            # local only: the engine's types in .claude-plugin/types/ are gitignored
+bunx tsc --noEmit -p .                       # local only: the engine's types in the repo root's .claude-plugin/types/ are gitignored
 ```
 
 ---
@@ -66,62 +71,6 @@ The codebase has no application layers in the traditional sense — it is a set 
 | `writer` agent | Final documentation pass, after both review and QA are clean | `agents/writer.md` |
 | `openapi` skill | Writes `<backend project>/openapi.yaml` for public endpoints (all but internal/admin): exports the framework's own spec when it has one, otherwise writes it from the route handlers found through the graph. Reads only the backend project. Invoked by `writer` when public endpoints changed, or on its own as `/openapi` | `skills/openapi/SKILL.md` |
 | Agent teams pane | Opens a right pane on session start: the leader's model, and one box per subagent the leader starts (status, simulated progress, tokens, estimated cost, effort). Costs use a hard-coded price table. Permission asks that need the person (none in auto mode, where the classifier decides) show in it with Proceed / Cancel (click, or type 1 / 2 in an empty prompt), which answer the ask. The pane shows the whole request (an edit's change included), and a press within a second of an ask coming up, or of the last answer, is ignored. Above the prompt, Proceed / Cancel only show when the whole request fits on the row. Unanswered for 10 minutes, with the pane off screen, or too long to read whole (over 20 lines or 1,500 characters), the normal permission prompt asks instead. Three settings in `/config` (the plugin's `userConfig`): **Always On** (default on; off, the pane opens only from a `▸ agent teams` button above the prompt), **Icons On** (default on; off hides the agent icons) and **Session Log On** (default on; off hides the session log box) | `hooks/register.tsx` |
-| Pomodoro timer | `/pomodoro` and its band above the prompt (one row, below the agent teams rows): the phase timing, the alerts and today's shared count. Six `/config` settings. See [Pomodoro timer](#pomodoro-timer) | `hooks/pomodoro.tsx`, wired from `hooks/register.tsx` |
-
----
-
-## Pomodoro timer
-
-`/pomodoro` runs a Pomodoro timer above the prompt. The pipeline above does not use it.
-
-**Commands.** `/pomodoro` starts a pomodoro when the timer is idle or waiting. During a pomodoro or a break it only toasts the status, e.g. `Pomodoro 2/4 — 18:42 left`, and changes nothing else.
-
-**Band.** One row above the prompt, below any agent teams rows. It is hidden until the first `/pomodoro` in a session, and again after Stop.
-
-| State | Band text | Buttons |
-|---|---|---|
-| Pomodoro | `🍅 Pomodoro 2/4 · 18:42 · today ×3` | Pause, Stop |
-| Paused | `🍅 Paused 2/4 · 18:42 · today ×3` | Resume, Stop |
-| Short break | `☕ Short break · 03:12 · today ×3` | Skip, Stop |
-| Long break | `☕ Long break · 12:40 · today ×4` | Skip, Stop |
-| Waiting | `🍅 Break over · next: pomodoro 3/4 · today ×3` | Start pomodoro, Stop |
-
-`[Reset count]` also shows in the row while today's count file is corrupt (see **Today's count** below).
-
-Flow: `/pomodoro` → pomodoro n/N → at 00:00 the count goes up by one and a break starts by itself (long when n = N, otherwise short) → at 00:00 the band waits → `Start pomodoro` or `/pomodoro`.
-
-- Pause freezes the countdown; a paused pomodoro still counts once it is resumed and finishes.
-- Skip ends a break at once, silently, and goes to waiting. Only breaks have Skip.
-- Stop cancels the current phase silently, hides the band and resets the cycle to 1. A stopped pomodoro is not counted.
-
-**Settings.** Six settings in `/config`, under the plugin's `userConfig`:
-
-| Setting | Default | Range |
-|---|---|---|
-| Pomodoro · On | on | on / off |
-| Pomodoro · Ring | on | on / off |
-| Pomodoro · Work minutes | 25 | 1–120 |
-| Pomodoro · Short break minutes | 5 | 1–120 |
-| Pomodoro · Long break minutes | 15 | 1–120 |
-| Pomodoro · Pomodoros per cycle | 4 | 2–8 |
-
-With Pomodoro · On off, there is no `/pomodoro` and no band. A value that is missing, not a whole number, or out of range uses its default. A change applies from the next phase that starts; the ring setting applies from the next phase end.
-
-**Alerts.** A pomodoro end shows `Pomodoro done — take a <n>-min break` and a break end shows `Break over — start your next pomodoro when ready`. Both play the ring unless Pomodoro · Ring is off. Skip, Pause, Resume and Stop make no sound and show no toast.
-
-The ring is `assets/sounds/pomodoro-ring.wav`, a two-tone bell synthesized by `assets/sounds/make-ring.ts`. Regenerate it with `bun assets/sounds/make-ring.ts`. The engine plays it with `afplay`, so it is audible on macOS only; on Linux or Windows nothing plays and the toast still shows.
-
-**Today's count.** Shared by every session on the machine. It is kept in the engine's cross-session store under the key `pomodoroDay` as `{ date, count }`, in a JSON file named `ai-workflow_…` in the `plugins/store` folder. A pomodoro counts on the local date it finishes. A stored date that isn't today reads as 0, so the count resets at local midnight. It survives restarting Claude Code.
-
-If the count file is corrupt, a toast says so once per session and the band shows `[Reset count]`. Clicking it rewrites only that file as an empty store, so the band shows `today ×0`. The reset acts only if the file is still corrupt on a fresh read and the file is this plugin's own store file. Otherwise it toasts the path to delete by hand.
-
-**Session scope.** The timer and the cycle position belong to one session. Closing the session (or `/clear`) ends the timer, and a pomodoro still running then is not counted.
-
-**Known limits (accepted)**
-- **Reset count folder check is loose by one character.** The own-file check requires the folder to end in `plugins/store` with no leading `/`, so a folder such as `evilplugins/store` also passes. In practice only a file named `ai-workflow_*.json` in a folder named `store` could match, and the engine never names one. Fix: `endsWith('/plugins/store')`.
-- **Windows paths.** The same check rejects backslash paths, so on Windows Reset count never writes and shows the delete-by-hand toast instead.
-- **Two sessions finishing at the same instant** can lose one count; the store has no atomic update.
-- **Once per session** for the corrupt-file toast means once per module load. Changing a setting reloads the module and can show it once more.
 
 ---
 
@@ -152,7 +101,7 @@ Allow rules match the command text, so a compound command needs each part allowe
 3. **Verify reproduction (conditional):** if the spec's `Type:` is `BUG` or `TICKET`, step "1a. Verify reproduction" spawns `ticket-reviewer` alone, before any other agent, and saves its report to `tmp/team/<spec slug>/ticket-review.md`. A `REPRODUCED` status continues the pipeline; `NOT REPRODUCED` or `BLOCKED` stops here and reports straight to the user — no designer, no engineer. `FEATURE` and `TECH_DEBT` specs skip this step entirely.
 4. **Design (conditional):** when the spec has a user-facing surface, the lead asks the user whether to run `designer` (never assuming a design is needed); on yes it spawns `designer` alone, before any engineer starts. Its output is saved to `design.md` in the run state and linked from `context.md`, along with a rendered storyboard (`design/storyboard.png`, every screen, state and error case, with interaction arrows). The lead then asks whether to upload it to Figma via the Figma MCP — checking the user is logged in and waiting for them if not — and opens the new file in the browser.
 5. **Implement:** the lead starts one `backend-engineer` or `frontend-engineer` per unblocked task, in parallel. Each engineer does one task in its own `git worktree`, made from the fetched base branch and set up with the install and env steps in `context.md`, opens one PR and reports its number to the lead. It comes back only to fix that PR. A frontend task builds against the API contract, without waiting for the backend to merge.
-6. **Review and QA:** each PR gets its own `code-reviewer` and `qa-tester`, at most 3 of each at a time, and PRs wait in a queue past that, oldest first. Later rounds go back to the same agents and check only what the fix touched. `code-reviewer` reviews the PR diff and writes `review-pr-<n>-round-<N>.md` in the run state; `qa-tester` checks the PR out in its own worktree, runs the project, exercises every API/UI/CLI surface, and writes `qa-pr-<n>-round-<N>.md`. Each returns one line with its verdict and the file's path. `VERDICT: FINDINGS` means at least one blocker; notes never cause another round and go in the feature PR. QA can also end in `VERDICT: BLOCKED` when an AC went untested, which the lead takes to the user. Findings go back to the PR's engineer, and the loop repeats — no round limit — until the same round is `CLEAN` for both; the lead then waits for the PR's CI, merges it into the feature branch and deletes its branch, local and remote. Throughout the run the lead checks the plan's usage (the mod's `usage` tool): at 90% it starts nothing new, and at 95% it stops every agent. When the window resets within 3 hours it schedules a one-shot `CronCreate` restart and compacts the conversation (the mod's `compact` tool) so the restart re-caches a summary, not the whole run; further out it gives the user the command to resume. It also compacts after every merge, since `state.md` holds the live state.
+6. **Review and QA:** each PR gets its own `code-reviewer` and `qa-tester`, at most 3 of each at a time, and PRs wait in a queue past that, oldest first. Later rounds go back to the same agents and check only what the fix touched. `code-reviewer` reviews the PR diff and writes `review-pr-<n>-round-<N>.md` in the run state; `qa-tester` checks the PR out in its own worktree, runs the project, exercises every API/UI/CLI surface, and writes `qa-pr-<n>-round-<N>.md`. Each returns one line with its verdict and the file's path. `VERDICT: FINDINGS` means at least one blocker; notes never cause another round and go in the feature PR. QA can also end in `VERDICT: BLOCKED` when an AC went untested, which the lead takes to the user. Findings go back to the PR's engineer, and the loop repeats — no round limit — until the same round is `CLEAN` for both; the lead then waits for the PR's CI, merges it into the feature branch and deletes its branch, local and remote. Throughout the run the lead checks the plan's usage (the mod's `usage` tool): at 90% it starts nothing new, and at 95% it stops every agent. When the window resets within 3 hours it schedules a one-shot `CronCreate` restart and compacts the conversation (the mod's `compact` tool) so the restart re-caches a summary, not the whole run; further out it gives the user the command to resume.
 7. **Final gate:** once every task is merged, a fresh `code-reviewer` and `qa-tester` check the merged feature branch against every AC, writing `final-review-round-<R>.md` and `final-qa-round-<R>.md`. Findings become fix tasks that go through steps 5-6, then the gate runs again.
 8. **Document:** once the final gate is clean, the lead spawns `writer` alone — never in parallel with another agent, never before both gates are clean — to update README/API docs/comments for the files that changed, and, when public endpoints changed, `openapi.yaml` through the `openapi` skill.
 9. **Report:** the lead confirms every PR's latest review and QA files and the final gate's say `CLEAN` from the same round, closes the Linear tickets or intent files, removes the worktrees, and reports what changed, AC-to-test coverage, every QA test and its outcome, and try-it-yourself steps to the user. Engineers commit their own PRs and the lead merges them into the feature branch; the lead commits the writer's doc changes there too, then opens one feature PR against the default branch and waits for its CI. The user reviews and merges it. Linear tickets stay in review until then, and re-running `/orchestrator <spec>` after the merge closes them. Re-running it after a review turns the PR's unresolved comments into fix tasks that go through the same gates, and offers to reply on and resolve the threads.
@@ -224,7 +173,7 @@ A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/worksh
 | "Which agent owns which layer?" | each agent's frontmatter `description:` line |
 | "What does the plugin declare itself as, and how is it installed locally?" | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` |
 | "What does a spec actually look like before I run `/orchestrator`?" | `examples/todo-reminders-spec.md` |
-| "How does `/pomodoro` work, and where is its state?" | `hooks/pomodoro.tsx` (state, transitions, band); its hooks are wired in `hooks/register.tsx` |
+| "How does `/pomodoro` work, and where is its state?" | It's the separate `pomodoro` plugin: `plugins/pomodoro/hooks/pomodoro.tsx` and `plugins/pomodoro/README.md` |
 
 ---
 
@@ -274,7 +223,7 @@ A skill under `skills/<name>/SKILL.md` is what becomes a slash command (`/worksh
 
 **The hooks module is `hooks/register.tsx` only, and its hooks pass `$` to module-level functions**
 
-**Rule:** `.claude-plugin/plugin.json` and `hooks/hooks.json` declare one hooks module. The hooks that call into `hooks/pomodoro.tsx` sit in `register.tsx` and pass `$` (and `on`) only to module-level functions, never to anything else.
+**Rule:** `.claude-plugin/plugin.json` and `hooks/hooks.json` declare one hooks module. Its hooks pass `$` (and `on`) only to module-level functions, never to anything else, such as `bandRow`. The `pomodoro` plugin follows the same rule with its own `register.tsx`.
 **Why:** `claude plugin validate` refuses a second `modules` entry, and the engine reads a hooks module's source and refuses `$` or `on` handed to anything else.
 **What breaks:** `claude plugin validate` fails, or the engine refuses the module, and the plugin's hooks are not loaded.
 

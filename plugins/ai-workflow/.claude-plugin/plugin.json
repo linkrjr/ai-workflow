@@ -1,6 +1,6 @@
 {
   "name": "ai-workflow",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "description": "AI engineering pipeline with /workshop (spec approval), /orchestrator (orchestrated design→implement→review→QA→document), /audit (codebase audit), /openapi (OpenAPI spec for public endpoints), and optional Jev advisory signals (stalled-loop check, spec check). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, qa-tester, and writer agents.",
   "author": {
     "name": "Ronaldo Gomes"
@@ -41,42 +41,6 @@
       "title": "Agent teams pane · Icons On",
       "description": "Show each agent's icon in the agent teams pane.",
       "default": true
-    },
-    "pomodoroOn": {
-      "type": "boolean",
-      "title": "Pomodoro · On",
-      "description": "Offer the /pomodoro timer. Off: no /pomodoro command and no Pomodoro band.",
-      "default": true
-    },
-    "pomodoroRing": {
-      "type": "boolean",
-      "title": "Pomodoro · Ring",
-      "description": "Play a ring when a pomodoro or a break ends. Off: the toast only. Applies from the next phase end.",
-      "default": true
-    },
-    "pomodoroWorkMinutes": {
-      "type": "number",
-      "title": "Pomodoro · Work minutes",
-      "description": "Length of a pomodoro, in whole minutes (1-120). Applies from the next phase that starts.",
-      "default": 25
-    },
-    "pomodoroShortBreakMinutes": {
-      "type": "number",
-      "title": "Pomodoro · Short break minutes",
-      "description": "Length of a short break, in whole minutes (1-120). Applies from the next phase that starts.",
-      "default": 5
-    },
-    "pomodoroLongBreakMinutes": {
-      "type": "number",
-      "title": "Pomodoro · Long break minutes",
-      "description": "Length of the long break after a full cycle, in whole minutes (1-120). Applies from the next phase that starts.",
-      "default": 15
-    },
-    "pomodoroPerCycle": {
-      "type": "number",
-      "title": "Pomodoro · Pomodoros per cycle",
-      "description": "Pomodoros before a long break (2-8). Applies from the next phase that starts.",
-      "default": 4
     },
     "logOn": {
       "type": "boolean",

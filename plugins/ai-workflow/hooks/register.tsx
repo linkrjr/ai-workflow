@@ -1,11 +1,10 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderInput } from 'claude-code'
 
 import type { Ask, Leader, LogLine, Subagent } from '../types'
 
 import { AGENT_ICONS, AGENT_ICON_SIZE, TEAM_ICON, TEAM_ICON_SIZE } from './icons'
 import type { Icon } from './icons'
-import { closePomodoro, openPomodoro, pomodoroBand, pomodoroConfig, runPomodoro } from './pomodoro'
 
 const PANE = 'agent-teams'
 const subagents = atom({ plugin: 'ai-workflow', key: 'subagents' } as const, [] as Subagent[])
@@ -231,12 +230,42 @@ async function openPane($: EngineInterface) {
   return $.ui.open({ id: PANE, title: 'Agent teams' })
 }
 
+// The agent teams row above the prompt, or undefined when it has nothing to show.
+async function bandRow($: EngineInterface, e: RenderInput<'AbovePrompt'>, isAlwaysOn: boolean) {
+  const a = (await read($, asks)).find(x => x.isAnswerable)
+  const { Box, Button, Text } = $.ui.resolve(e)
+  if (!a) {
+    if (isAlwaysOn || (await read($, isPaneOpen))) return undefined
+    return (
+      <Box>
+        <Button key="open-pane" label="▸ agent teams" plain dimColor onPress={() => void openPane($)} />
+      </Box>
+    )
+  }
+  const summary = `⚠ ${a.who} wants ${a.tool}: `
+  if (a.detail.includes('\n') || summary.length + a.detail.length + 2 + BAND_BUTTONS_WIDTH > e.props.bodyColumns) {
+    return (
+      <Box>
+        <Text color={ASK_COLOR} wrap="truncate-end">{summary}read it in the agent teams pane</Text>
+      </Box>
+    )
+  }
+  return (
+    <Box>
+      <Text color={ASK_COLOR} wrap="truncate-end">
+        {summary}{a.detail}{'  '}
+      </Text>
+      <Button key={`band-proceed-${a.id}`} label="Proceed" hotkey="1" plain onPress={() => answerAsk($, a.id, 'proceed')} />
+      <Text> </Text>
+      <Button key={`band-cancel-${a.id}`} label="Cancel" hotkey="2" plain onPress={() => answerAsk($, a.id, 'cancel')} />
+    </Box>
+  )
+}
+
 export const register: Register = (on, options) => {
   // Always On off: the pane opens only from the button above the prompt.
   const isAlwaysOn = options.alwaysOn !== false
   const isIconsOn = options.iconsOn !== false
-  // Undefined with the Pomodoro setting off: nothing of it is offered or drawn.
-  const pomodoro = pomodoroConfig(options)
   const isLogOn = options.logOn !== false
 
   // The session's permission mode, as the last prompt saw it. In auto mode the classifier
@@ -247,9 +276,6 @@ export const register: Register = (on, options) => {
   on('classic.UserPromptSubmit', ($, e, next) => ((mode = e.permission_mode), next(e)))
 
   on('session.start', async ($, e, next) => {
-    // With the setting off the stored phase is cleared, so turning it on again never
-    // finishes a pomodoro nobody saw.
-    await (pomodoro ? openPomodoro($, pomodoro) : closePomodoro($))
     // The orchestrator reads the plan's limits through this to pause before one runs out.
     await $.tool.register({
       name: 'usage',
@@ -437,56 +463,20 @@ export const register: Register = (on, options) => {
     return r
   })
 
-  on('session.end', async ($, e, next) => {
-    await closePomodoro($)
-    return next(e)
-  })
-
-  on('command.run', { command: 'pomodoro' }, async $ => {
-    if (pomodoro) await runPomodoro($, pomodoro)
-    return {}
-  })
-
-  // The Pomodoro row goes below the agent teams band. That hook returns its own tree without
-  // calling `next` for its open button and asks, so this one is registered first: its `next`
-  // is that tree, and its row is drawn under it.
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const above = await next(e)
-    const row = pomodoro && !e.props.hasSurvey ? await pomodoroBand($, e, above, pomodoro) : undefined
-    return row ?? above
-  })
-
   // The first answerable ask, above the prompt too: a bare 1 or 2 in an empty prompt answers it,
   // but only when its whole request fits on the row. Otherwise the band points at the pane.
-  // With Always On off and the pane closed, the band offers to open it instead.
+  // With Always On off and the pane closed, the band offers to open it instead. The rows beneath
+  // (another plugin's, such as the Pomodoro band) stay below this one.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
-    const a = (await read($, asks)).find(x => x.isAnswerable)
-    const { Box, Button, Text } = $.ui.resolve(e)
-    if (!a) {
-      if (isAlwaysOn || (await read($, isPaneOpen))) return next(e)
-      return (
-        <Box>
-          <Button key="open-pane" label="▸ agent teams" plain dimColor onPress={() => void openPane($)} />
-        </Box>
-      )
-    }
-    const summary = `⚠ ${a.who} wants ${a.tool}: `
-    if (a.detail.includes('\n') || summary.length + a.detail.length + 2 + BAND_BUTTONS_WIDTH > e.props.bodyColumns) {
-      return (
-        <Box>
-          <Text color={ASK_COLOR} wrap="truncate-end">{summary}read it in the agent teams pane</Text>
-        </Box>
-      )
-    }
+    const own = await bandRow($, e, isAlwaysOn)
+    const beneath = await next(e)
+    if (!own) return beneath
+    const { Box } = $.ui.resolve(e)
     return (
-      <Box>
-        <Text color={ASK_COLOR} wrap="truncate-end">
-          {summary}{a.detail}{'  '}
-        </Text>
-        <Button key={`band-proceed-${a.id}`} label="Proceed" hotkey="1" plain onPress={() => answerAsk($, a.id, 'proceed')} />
-        <Text> </Text>
-        <Button key={`band-cancel-${a.id}`} label="Cancel" hotkey="2" plain onPress={() => answerAsk($, a.id, 'cancel')} />
+      <Box flexDirection="column">
+        {own}
+        {beneath}
       </Box>
     )
   })

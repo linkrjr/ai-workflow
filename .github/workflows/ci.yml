@@ -8,6 +8,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/ai-workflow
     steps:
       - uses: actions/checkout@v4
       - name: Script tests
@@ -24,13 +27,18 @@ jobs:
           fi
       - name: Prompts use the per-spec run state
         run: |
-          if grep -rnE 'tmp/team/(handoff|design|review|qa|jev|ticket|feature)' skills agents README.md; then
+          if grep -rnE 'tmp/team/(handoff|design|review|qa|jev|ticket|feature)' skills agents ../../README.md; then
             echo "Run state lives in tmp/team/<spec slug>/; see skills/orchestrator/SKILL.md."
             exit 1
           fi
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
-      - name: Validate the plugin
-        run: claude plugin validate .
+      - name: Validate the marketplace and plugins
+        run: |
+          claude plugin validate ../..
+          claude plugin validate .
+          claude plugin validate ../pomodoro
       - name: Mod tests
-        run: claude plugin test
+        run: |
+          claude plugin test .
+          claude plugin test ../pomodoro

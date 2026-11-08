@@ -4,9 +4,9 @@ Covers all 45 items in `docs/workflow-audit-2026-11-04.md`. Flaw, Speed and Toke
 
 ## Progress
 
-Work is on the local branch `workflow-audit-fixes`, not pushed. Phases 1–8 are done. Phase 9 is done except Tokens 5, the effort comparison, and the README allow rule, which no command in the test run needed. One real run on this branch (Nov 9) finished end to end. CI has never run. Open decision: per-merge compaction (Tokens 1) costs more than it saves on small runs; see the Nov 9 note.
+Work is on the local branch `workflow-audit-fixes`, not pushed. All 10 phases are done, except testing the README's allow rule, which no command in either test run needed. One real run on this branch (Nov 9) finished end to end. CI has never run, and nothing is published yet.
 
-To resume: "Continue the plan in `docs/workflow-audit-plan-2026-11-04.md`, on branch `workflow-audit-fixes`." Test runs need `claude --plugin-dir ~/Projects/repos/projects/ai-workflow --model opus --effort medium`. Without `--plugin-dir`, the installed 1.4.0 plugin runs instead, as it did on Nov 8.
+The plugin now lives in `plugins/ai-workflow/`, so test runs need `claude --plugin-dir ~/Projects/repos/projects/ai-workflow/plugins/ai-workflow --model opus --effort medium`. Without `--plugin-dir`, the installed 1.4.0 plugin runs instead, as it did on Nov 8.
 
 Decisions made along the way:
 - **Phase 2:** an opted-in repo still sends full diffs and specs to Jev; secret scrubbing wasn't part of the decision.
@@ -85,16 +85,27 @@ Decisions made along the way:
    - Tokens 2: find why engineers avoid `Edit`, and fix it (done, confirmed Nov 9)
    - Tokens 11: break down the 27k agent baseline (done, confirmed Nov 9: 14.5–16k)
    - Test run: compare against $7.60 per task (done Nov 9: about $4.00, against $2.90 for 1.4.0 on a similar spec)
-   - Tokens 5: compare effort levels on a known PR
-   - Confirm the lead's model and effort across wakes (held for a whole 1.4.0 run started with the flags; wakes still untested): the docs say a skill's override lasts one turn and don't cover wakes, so Phase 7 only documents starting with `--model opus --effort medium`
-   - Confirm agents keep working and reports still arrive when the lead compacts after a merge, and that SendMessage resumes reviewers for later rounds
-   - Extract the commands auto mode denies (done from the Nov 8 run), and test the README's allow rule
-10. **Prepare to publish**
+   - Tokens 5: compare effort levels on a known PR (done Nov 9; reviewer lowered from `xhigh` to `high`)
+   - Confirm the lead's model and effort across wakes (done Nov 9: held across a usage pause and resume)
+   - Confirm agents keep working and reports still arrive when the lead compacts after a merge, and that SendMessage resumes reviewers for later rounds (done Nov 9; per-merge compaction then removed, see Phase 10)
+   - Extract the commands auto mode denies (done from the Nov 8 run), and test the README's allow rule (still untested)
+10. **Prepare to publish** (done)
+    - Tokens 1 reversed: no compaction after merges, only before a usage pause
+
     - Other: dependency preflight that fails loudly
     - Other: add evals, seeded with whatever the test run exposed
     - Other: move Pomodoro to its own plugin
     - Other: update stale docs, including `TECH_DEBT_AUDIT.md`
     - Bump the version
+
+Phase 10 notes:
+- **Tokens 1 reversed:** the user chose to drop compaction after merges and keep it only before a usage pause. The lead's floor is about 72k tokens, so each compaction re-cached more than it saved.
+- **Tokens 5:** fresh reviewers at `medium`, `high` and `xhigh` reviewed PR #4's round-2 commit (8a5ba20..8c0d104) once each. They cost $0.13, $0.15 and $0.41. All three returned `CLEAN` and missed the blocker the real run's round-2 reviewer caught; that reviewer had round 1's reports to start from. `xhigh` did more checking, a mutation check and a browser look, but reached the same verdict for 2.7 times the cost of `high`. So the reviewer is now at `high`. One sample on one PR, so `medium` isn't ruled out.
+- **Preflight:** section 1 step 3 checks `git`, `gh`, `jq`, `curl` and every skill the agents preload, names what each missing one costs, and asks whether to continue. The writer's `ai-slop-cleaner` line is gone, because that skill isn't installed or documented.
+- **Pomodoro:** it's now its own plugin, `plugins/pomodoro/`, with its own settings, tests and README. `claude plugin test` runs every test under the folder it's given, so the repo had to become a marketplace with both plugins under `plugins/`. Plugin hook order isn't fixed, so the agent teams band now draws its row above whatever the band beneath returns, instead of replacing it. That keeps the Pomodoro row showing during an ask, whichever plugin loads first. Today's count starts again in the new plugin's store file.
+- **Evals:** `plugins/ai-workflow/evals/` has two cases. `orchestrator-stops-without-acceptance-criteria` passed on its first run, costing $0.31. `reviewer-catches-cleared-error-refailure` is seeded from the bug the task gates missed, using the real PR's code. Its first run, a reviewer at `high` briefed by a main session, caught the bug and scored 1.0 for $0.30. The three effort runs above had missed it, so a fresh reviewer catches this bug 1 time in 4. Run it with `--runs 5` or more before trusting a change to the reviewer. Run them with `claude plugin eval . --scaffold --trust-plugin --allow-tools Bash` from the plugin folder.
+- **Stale docs:** `TECH_DEBT_AUDIT.md` is deleted. It still described six agents and no runtime code, and `/workshop` reads it as input; `/audit` writes a fresh one. `examples/README.md` paths are updated.
+- **Version:** `ai-workflow` 2.0.0, because `/pomodoro` and its settings left the plugin and run state moved. `pomodoro` starts at 1.0.0. The README has an upgrade note.
 
 ## Why this order
 

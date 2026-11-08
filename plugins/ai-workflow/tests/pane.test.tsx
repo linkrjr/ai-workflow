@@ -244,6 +244,11 @@ test('Cancel above the prompt refuses an ask a person would answer', async ($, o
   let now = Date.parse('2026-10-25T14:20:00')
   on('clock.now', () => ({ value: now }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
+  // The engine's own band beneath: nothing to show.
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box key="engine-band" />
+  })
   on('tool.check', () => ({ decision: 'ask' as const }))
   on('process.spawn', async function* (_, e, next) {
     await new Promise<void>(resolve => next.signal.addEventListener('abort', () => resolve()))
@@ -267,6 +272,8 @@ test('Cancel above the prompt refuses an ask a person would answer', async ($, o
     props: { hasSurvey: false, isWorking: true, maxRows: 3, bodyColumns: 100, scroll: { offset: 0, bodyRows: 3 }, view: {} },
   })
   expect((await band.find({ type: 'Text', text: /^⚠/ }))?.text).toBe('⚠ Leader wants Bash: git push  ')
+  // The rows beneath (another plugin's, such as the Pomodoro band) still draw, below the ask.
+  expect(await band.find({ key: 'engine-band' })).toBeDefined()
   now += 5000
   await band.press({ key: 'band-cancel-t2' })
   await band.unmount()
@@ -502,6 +509,11 @@ test('an ask too long to read whole goes to the engine prompt', async ($, on) =>
 
 test('the band offers no answer when the ask would not fit on its row', async ($, on) => {
   const { clock, ask } = holdAsks($, on)
+  // The engine's own band beneath: nothing to show.
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box key="engine-band" />
+  })
   const { verdict, isStored } = ask('t1', 'Bash', { command: 'git status\nrm -rf build' })
   await isStored
   const band = await $.ui.mount({
