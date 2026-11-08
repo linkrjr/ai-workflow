@@ -18,7 +18,7 @@ This repo is a Claude Code plugin, `ai-workflow` (`.claude-plugin/plugin.json`),
 
 ## Setup & Prerequisites
 
-This plugin does not declare its external skill dependencies in `plugin.json` — Claude Code's plugin manifest schema has no `dependencies` field to put them in, so this is enforced by convention, not tooling. Before running `/orchestrator`, install these or the steps that invoke them silently degrade (the `Skill(...)` call just doesn't resolve — no error, the agent skips the discipline and moves on):
+This plugin does not declare its external skill dependencies in `plugin.json` — Claude Code's plugin manifest schema has no `dependencies` field to put them in, so this is enforced by convention, not tooling. Before running `/orchestrator`, install these or the steps that use them silently degrade (the `Skill(...)` call just doesn't resolve — no error, the agent skips the discipline and moves on). The engineers, `qa-tester` and `ticket-reviewer` preload theirs through the `skills:` frontmatter field instead of carrying the `Skill` tool, which keeps the full skill listing (about 9k tokens on this machine) out of every spawn; a missing preloaded skill is skipped with only a debug-log warning:
 
 | Skill invoked | Called from | Where it actually comes from |
 |---|---|---|
@@ -26,7 +26,7 @@ This plugin does not declare its external skill dependencies in `plugin.json` �
 | `writing-for-agents` | `agents/writer.md` | Same personal skills-dir symlink as above. `mattpocock-skills@claude-plugins-official` bundles an equivalent under `mattpocock-skills:writing-for-agents`, not referenced here. |
 | `handoff` | `skills/orchestrator/SKILL.md` (the lead only — no worker agent invokes it) | Same personal skills-dir symlink as above. |
 | `jev` (this plugin's own skill, `skills/jev/`) | `skills/workshop/SKILL.md`, `skills/orchestrator/SKILL.md` | Optional, and off by default because it sends diffs and specs to TypeSafe. Needs `TYPESAFE_API_KEY` (early access, console.typesafe.ai/keys), a `.jev-enabled` file at the target repo's root, plus `curl` and `jq`. Without both the key and the file every Jev step prints `UNAVAILABLE` and the pipeline runs exactly as before. |
-| `run`, `pinchtab` | `agents/qa-tester.md` | `run` and `pinchtab` are personal skills-dir symlinks, same as the row above. `pinchtab` drives UI workflows end to end; without it, UI surfaces are reported `BLOCKED` instead of tested. |
+| `run`, `pinchtab` | `agents/qa-tester.md` (`pinchtab` also `agents/ticket-reviewer.md`) | `run` and `pinchtab` are personal skills-dir symlinks, same as the row above. `pinchtab` drives UI workflows end to end; without it, UI surfaces are reported `BLOCKED` instead of tested. |
 
 **Verify before running a task:** confirm each bare skill name above resolves on your machine (e.g. it's listed when Claude Code loads skills, or symlinked under your skills directory). If `tdd`, `surgical-patch`, `safe-refactor`, `writing-for-agents`, `handoff`, or `pr` aren't available, either install an equivalent under that exact bare name, or accept that the corresponding engineering discipline (TDD, surgical patching, doc cleanup) will be silently skipped for this run.
 
