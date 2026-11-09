@@ -29,6 +29,8 @@ gh_auth() { have gh && gh auth status >/dev/null 2>&1; }
 teams() { [[ ${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-} == 1 ]]; }
 task_tools() { [[ ${CLAUDE_CODE_ENABLE_TODO_TOOLS:-} == 1 ]]; }
 set_() { [[ -n ${!1:-} ]]; }
+# Auto mode blocks an agent's `git commit` unless a settings file allows it.
+git_allowed() { grep -qs 'Bash(git commit' .claude/settings.local.json .claude/settings.json "$HOME/.claude/settings.json"; }
 
 need git "git" "nothing can run" have git
 need gh "GitHub CLI (gh)" "engineers can't open PRs" have gh
@@ -40,6 +42,7 @@ need pinchtab-skill "pinchtab skill" "QA doesn't know the pinchtab commands" ski
 need chrome "Chrome or Chromium" "pinchtab has no browser to drive" chrome
 want agent-teams "agent teams on (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1)" "agents run as plain subagents" teams
 want task-tools "task list tools on (CLAUDE_CODE_ENABLE_TODO_TOOLS=1)" "newer models get no TaskCreate, so team mode runs its fallback: no shared task list, no task gate" task_tools
+want git-allow "engineers allowed to git commit, merge and push (settings allow rules)" "auto mode blocks the engineers' commits and pushes" git_allowed
 want graphify "graphify CLI and skill" "no codebase graph" bash -c 'command -v graphify >/dev/null && { [ -f "$HOME/.claude/skills/graphify/SKILL.md" ] || [ -f .claude/skills/graphify/SKILL.md ]; }'
 want linear "LINEAR_API_KEY set" "tasks can't be tracked in Linear" set_ LINEAR_API_KEY
 want jev "TYPESAFE_API_KEY set" "no Jev signals (off by default anyway)" set_ TYPESAFE_API_KEY

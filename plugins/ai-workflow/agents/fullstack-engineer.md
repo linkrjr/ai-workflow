@@ -18,8 +18,8 @@ Your brief names your worktree and the feature branch. Use plain `git`, even whe
 2. Follow `Worktree setup` in the run context from your worktree.
 
 ## Each task
-1. Claim it on the task list, or take it from your brief when there is no task list.
-2. A task whose description says `Risky: yes`: before writing code, SendMessage the lead a plan of 5 lines or fewer (what changes in the schema, contract, auth or data, and how it's tested), and wait. Build only after the lead says go; follow any change it asks for.
+1. A task whose description says `Risky: yes`: before you claim it, SendMessage the lead a plan of 5 lines or fewer (what changes in the schema, contract, auth or data, and how it's tested), and wait. Build only after the lead says go, and follow any change it asks for.
+2. Claim it on the task list (`in_progress`) only when you start building, or take it from your brief when there is no task list. Going idle with a task `in_progress` counts as completing it: the plugin then runs its checks, and a failure uses up one of your three tries. So before you wait on anything (a plan answer, a question, the lead), set your task back to `pending`.
 3. Build it test-first. These skills are preloaded when you run as a subagent; as a teammate, load the one that applies with the `Skill` tool: new behaviour → `ai-workflow:tdd`; a narrow fix → `ai-workflow:surgical-patch`; restructuring without a behaviour change → `ai-workflow:safe-refactor`.
 4. Run the task's `Checks:` command from your worktree; fix until it exits 0.
 5. Commit only your files: `git commit -m "<task ID> <task name> (<AC IDs>)" -- <files>`. Then `git fetch origin <feature branch>`, `git merge --no-edit origin/<feature branch>`, and `git push origin HEAD:<feature branch>`. Retry the fetch, merge and push when the push is refused because the other engineer pushed first. Never force-push and never rebase.

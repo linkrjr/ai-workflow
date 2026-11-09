@@ -35,6 +35,7 @@ This repo is a Claude Code marketplace (`.claude-plugin/marketplace.json`) hosti
 | `git`, `gh` (signed in), `jq`, `curl` | PRs, Linear, Jev, the status script | `brew install`, or tells you the command; `gh auth login` you run yourself |
 | `pinchtab` CLI and skill, plus Chrome or Chromium | QA drives the UI in a real browser; without them every UI check comes back `BLOCKED` | `brew install pinchtab/tap/pinchtab` (or `bun add -g` / `npm install -g`), then `bunx skills add pinchtab/pinchtab` (`npx` without Bun) |
 | Agent teams and task tools (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`), optional | Agents run as teammates, and team mode gets its shared task list and task gate. Newer models such as Opus 5.5 have no task tools without the second variable | Writes it to this project's or your user settings, if you agree |
+| Git allow rules, optional | Without them, auto mode blocks the engineers' `git commit` and push | Adds them to this project's or your user settings, if you agree |
 | `graphify`, optional | The codebase graph | `uv tool install graphifyy`, then `graphify install` |
 | `LINEAR_API_KEY` / `TYPESAFE_API_KEY`, optional | Linear tracking / Jev signals (Jev also needs a `.jev-enabled` file) | You export it; setup never asks for a key |
 
@@ -95,7 +96,11 @@ The codebase has no application layers in the traditional sense — it is a set 
 { "permissions": { "allow": ["Bash(/path/to/ai-workflow/skills/orchestrator/scripts/cleanup.sh *)"] } }
 ```
 
-Allow rules match the command text, so a compound command needs each part allowed. The measured run's other denials weren't extracted, so the first real run should show whether more rules are needed.
+Allow rules match the command text, so a compound command needs each part allowed. In the Nov 9 team-mode run, auto mode also blocked the engineer's `git commit` ("Unrequested Commit in a Connected App"). So team mode asks in its first questions whether to add these rules to the target repo's `.claude/settings.local.json`, and `/ai-workflow:setup` offers them for one project or every project. They let engineers commit and push to `feature/` branches, and nothing more:
+
+```json
+{ "permissions": { "allow": ["Bash(git commit:*)", "Bash(git merge:*)", "Bash(git push origin HEAD:feature/*)"] } }
+```
 
 **Plain `git`.** The prompts use raw `git` and worktrees so the plugin works in any repo. On a machine whose global rules require GitButler, this workflow is the exception: the prompts tell each agent to use `git` as written.
 

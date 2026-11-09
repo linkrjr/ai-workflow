@@ -12,6 +12,7 @@ Check this machine for what ai-workflow needs, then offer to fix what's missing.
    - **Command-line tools:** git, gh, jq, curl
    - **Browser testing:** pinchtab CLI, pinchtab skill, Chrome
    - **Agent teams** (only if `OPTIONAL agent-teams` or `OPTIONAL task-tools`): both settings, set together
+   - **Git permissions** (only if `OPTIONAL git-allow`)
    - **Extras:** graphify, cmux
 4. For each item the user ticked, use the matching fix below, one at a time, and show the command before running it. On a failure, say what failed and go on to the next item.
 
@@ -23,6 +24,7 @@ Check this machine for what ai-workflow needs, then offer to fix what's missing.
 | pinchtab skill | `bunx skills add pinchtab/pinchtab` when Bun is installed, otherwise `npx skills add pinchtab/pinchtab`. It installs the skill from pinchtab's own repo, so ask before running it. |
 | Chrome | Tell the user to install Google Chrome or Chromium. |
 | Agent teams and task tools | Ask "This project only" (Recommended) / "Every project". Teams are experimental, and in every session they let Claude turn ordinary helper agents into teammates, which costs more tokens. Then add `"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"` and `"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1"` under `env` in `.claude/settings.local.json` (this project) or `~/.claude/settings.json` (every project). Keep everything already in the file. Without the second, newer models such as Opus 5.5 get no `TaskCreate`, and team mode can't use the shared task list. It takes effect from the next session. |
+| Git permissions | Ask "This project only" (Recommended) / "Every project". Add these to `permissions.allow` in `.claude/settings.local.json` (this project) or `~/.claude/settings.json` (every project), keeping everything already in the file: `Bash(git commit:*)`, `Bash(git merge:*)`, `Bash(git push origin HEAD:feature/*)`. They let engineers commit, merge the feature branch in, and push to `feature/` branches only. Force pushes stay blocked. |
 | graphify | `uv tool install graphifyy` (or `pipx install graphifyy` without uv), then `graphify install` to add its skill. |
 | cmux | Point to https://cmux.dev. It's a terminal app, so the user installs it. |
 

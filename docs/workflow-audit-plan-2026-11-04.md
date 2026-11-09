@@ -129,6 +129,20 @@ Follow-ups from the Nov 9 runs:
     - `check.sh` and setup now cover the task tools variable.
     - The lead names the mode, and what's missing in fallback, before its first question.
     - The gates now treat the spec's wording as winning over the design doc or a narrower reading. Both gates had passed the save-error rule as a note again, because the design doc had narrowed it to each control.
+- **Team mode test run 2 (`simple-test-todo-5`, real team mode with `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`):**
+  - **Result:** $12.30, over the $7.60 target. 35 minutes of activity across a 2.6-hour span, because a usage pause at 95% sat for about 2 hours. Both gates were clean on round 1, and this time the save-error rule was built as one shared error.
+  - **Task list and task gate:** both worked. 6 tasks were created with dependencies, and the gate fired for a teammate.
+  - **But the gate also fires when a teammate goes idle with a task `in_progress`:** the engineer had claimed T1 and was waiting for plan approval, and three idle turns used up all three tries before any code existed. `CHECKS STUCK` went to the user.
+  - **Other problems:**
+    - The lead marked all 4 tasks risky, so each one waited on a plan exchange.
+    - The lead re-sent "go" each time an earlier idle notice crossed its reply.
+    - Auto mode blocked the engineer's `git commit`, and the user added allow rules.
+    - The lead's cost includes the re-cache after the pause.
+  - **Fixed:**
+    - Engineers claim a task only when they start building, and set it back to `pending` before waiting.
+    - Risky now means changing something that already exists.
+    - The lead doesn't re-send because of a stale idle notice.
+    - The README shows the commit, merge and push allow rules.
 
 ## Why this order
 
