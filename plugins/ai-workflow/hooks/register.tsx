@@ -230,6 +230,23 @@ async function openPane($: EngineInterface) {
   return $.ui.open({ id: PANE, title: 'Agent teams' })
 }
 
+// When the setup check finds a required tool or skill missing, a toast points at /ai-workflow:setup:
+// once per list of missing items, so it stays quiet until the list changes. It never blocks or
+// breaks the session start.
+const SETUP_SEEN = 'setupMissing'
+async function setupNotice($: EngineInterface) {
+  try {
+    const { exitCode, stdout } = await $.process.run(['bash', `${$.plugin.root}/skills/setup/scripts/check.sh`])
+    const missing = stdout.split('\n').filter(l => l.startsWith('MISSING ')).map(l => l.slice(8, l.indexOf(':')))
+    const seen = exitCode === 0 ? '' : missing.join(',')
+    if ((await $.store.get(SETUP_SEEN)) === seen) return
+    await $.store.set(SETUP_SEEN, seen)
+    if (seen) $.ui.toast(`ai-workflow: ${missing.length} missing (${missing.join(', ')}) — run /ai-workflow:setup`)
+  } catch {
+    // no process runner or store here: the orchestrator's own preflight still checks
+  }
+}
+
 // The agent teams row above the prompt, or undefined when it has nothing to show.
 async function bandRow($: EngineInterface, e: RenderInput<'AbovePrompt'>, isAlwaysOn: boolean) {
   const a = (await read($, asks)).find(x => x.isAnswerable)
@@ -287,6 +304,7 @@ export const register: Register = (on, options) => {
       description: 'Compact the conversation, as /compact does, once the current turn ends.',
       inputSchema: { type: 'object', properties: { instructions: { type: 'string', description: 'What the summary must keep' } } },
     }).catch(err => $.ui.log(`ai-workflow: compact tool not registered: ${err}`))
+    void setupNotice($)
     // A reload (a changed setting) keeps the engine's panes: read whether ours is up.
     await update($, isPaneOpen, () => false)
     if (isAlwaysOn) void openPane($)

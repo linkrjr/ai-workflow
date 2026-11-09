@@ -69,7 +69,7 @@ When the whole run is done (section 7, right after you set `Done`), run `cmux se
 1. Read the spec. If it has no "Acceptance criteria" section, stop and tell the user to run /workshop first.
 2. Check the spec's `Type:`. If it is `BUG` or `TICKET`, resolve reproduction now, before any branch, push or graph build — see "1a. Verify reproduction" below. Do not start designer, backend-engineer, or frontend-engineer until that gate lets the run continue. A `FEATURE` or `TECH_DEBT` spec goes straight on. Then ask the run's questions together — see "1e. Questions up front" below.
 3. Check that PRs can be opened: `gh auth status` succeeds and `git remote get-url origin` points at GitHub. If not, tell the user what's missing and ask "Retry" / "Stop"; engineers can't submit work without it. When the only thing missing is the remote, also offer "Create a private GitHub repo", and on that answer run `gh repo create <repo name> --private --source . --push`, then check again. The engineers' local-only rules are about the app's runtime, not git, so a GitHub remote doesn't break them.
-   Then check the dependencies that otherwise fail silently. Run `command -v git gh jq curl`. Then check your skill list for `tdd`, `surgical-patch` and `safe-refactor` (engineers), `run` and `pinchtab` (QA, and `pinchtab` for UI repros), `writing-for-agents` (writer) and `handoff` (you). A missing skill fails with no error, so the agent just runs without that discipline. If anything is missing, name each one and what it costs (without `pinchtab`, every UI AC comes back `BLOCKED`), then ask "Continue without them" / "Stop". Ask this together with the 1e questions when you can.
+   Then run `${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/check.sh`, because a missing tool or skill otherwise fails silently and the agent just runs without it. If it prints any `MISSING` line, name each item and what it costs (the text after the dash), then ask "Continue without them" / "Stop and run /ai-workflow:setup". Ask this together with the 1e questions when you can. `OPTIONAL` lines change nothing.
 4. Set up the feature branch, before any other work — see "1d. Feature branch" below.
 5. Set up the codebase graph — see "1c. Codebase graph" below.
 6. Note the main worktree (`git rev-parse --show-toplevel`), the base branch (the feature branch from 1d), the default branch (also from 1d) and the base commit (`git rev-parse HEAD`).
@@ -283,7 +283,7 @@ Then tell the user:
 - Branches deleted, and any unmerged branch left behind with its PR
 - Steps the user can follow to try the feature
 
-If the work must pause, invoke the `handoff` skill before you stop.
+If the work must pause, invoke the `ai-workflow:handoff` skill before you stop.
 
 ## When things go wrong
 - **An agent crashes, or ends without a report:** spawn a fresh one with the same name and worktree, told "your worktree has the work in progress". If that one fails too, ask the user: "Retry" (Recommended) / "Stop this task".

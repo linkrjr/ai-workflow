@@ -20,17 +20,25 @@ This repo is a Claude Code marketplace (`.claude-plugin/marketplace.json`) hosti
 
 **Upgrading from 1.4:** `/pomodoro` moved to its own plugin. Run `/plugin install pomodoro@ai-workflow` to keep it, and set its options again in `/config`. Run state is now kept per spec in `tmp/team/<spec slug>/`, so a run started on 1.4 can't be resumed.
 
-This plugin does not declare its external skill dependencies in `plugin.json` — Claude Code's plugin manifest schema has no `dependencies` field to put them in, so this is enforced by convention, not tooling. Before running `/orchestrator`, install these or the steps that use them silently degrade (the `Skill(...)` call just doesn't resolve — no error, the agent skips the discipline and moves on). The engineers, `qa-tester` and `ticket-reviewer` list theirs in the `skills:` frontmatter field, which preloads them when the agent runs as a subagent. The orchestrator's agents run as agent-team teammates, and Claude Code doesn't apply `skills:` to teammates, so these agents also carry the `Skill` tool and load the skill themselves. That tool brings the full skill listing into every spawn, so keep your installed skills few (Nov 9: 181 skills cost about 9k tokens per agent). A missing skill fails silently:
+**Install:**
 
-| Skill invoked | Called from | Where it actually comes from |
+```
+/plugin marketplace add linkrjr/ai-workflow
+/plugin install ai-workflow@ai-workflow
+/ai-workflow:setup
+```
+
+`/ai-workflow:setup` checks this machine (`skills/setup/scripts/check.sh`), lists what's missing and what each item costs, and offers to install what you tick. The same check runs as `/orchestrator`'s preflight. The plugin's startup hook also runs it and shows a one-time notice when something required is missing.
+
+| Needed | Why | How setup gets it |
 |---|---|---|
-| `tdd`, `surgical-patch`, `safe-refactor` | `agents/backend-engineer.md`, `agents/frontend-engineer.md` | Personal skills-dir symlinks under `~/.claude/skills/` → `~/.agents/skills/` on this machine — not a marketplace plugin. `mattpocock-skills@claude-plugins-official` bundles equivalents for `tdd`, but only under a scoped name (`mattpocock-skills:tdd`) these files do not reference. |
-| `writing-for-agents` | `agents/writer.md` | Same personal skills-dir symlink as above. `mattpocock-skills@claude-plugins-official` bundles an equivalent under `mattpocock-skills:writing-for-agents`, not referenced here. |
-| `handoff` | `skills/orchestrator/SKILL.md` (the lead only — no worker agent invokes it) | Same personal skills-dir symlink as above. |
-| `jev` (this plugin's own skill, `skills/jev/`) | `skills/workshop/SKILL.md`, `skills/orchestrator/SKILL.md` | Optional, and off by default because it sends diffs and specs to TypeSafe. Needs `TYPESAFE_API_KEY` (early access, console.typesafe.ai/keys), a `.jev-enabled` file at the target repo's root, plus `curl` and `jq`. Without both the key and the file every Jev step prints `UNAVAILABLE` and the pipeline runs exactly as before. |
-| `run`, `pinchtab` | `agents/qa-tester.md` (`pinchtab` also `agents/ticket-reviewer.md`) | `run` and `pinchtab` are personal skills-dir symlinks, same as the row above. `pinchtab` drives UI workflows end to end; without it, UI surfaces are reported `BLOCKED` instead of tested. |
+| `git`, `gh` (signed in), `jq`, `curl` | PRs, Linear, Jev, the status script | `brew install`, or tells you the command; `gh auth login` you run yourself |
+| `pinchtab` CLI and skill, plus Chrome or Chromium | QA drives the UI in a real browser; without them every UI check comes back `BLOCKED` | `brew install pinchtab/tap/pinchtab` (or `bun add -g` / `npm install -g`), then `bunx skills add pinchtab/pinchtab` (`npx` without Bun) |
+| Agent teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), optional | Agents run as teammates instead of plain subagents | Writes it to this project's or your user settings, if you agree |
+| `graphify`, optional | The codebase graph | `uv tool install graphifyy`, then `graphify install` |
+| `LINEAR_API_KEY` / `TYPESAFE_API_KEY`, optional | Linear tracking / Jev signals (Jev also needs a `.jev-enabled` file) | You export it; setup never asks for a key |
 
-**Preflight:** at the start of every run, `/orchestrator` checks for `git`, `gh`, `jq`, `curl` and each bare skill name above. It names anything missing and what that costs, then asks whether to continue without it or stop. To fix a missing skill, install an equivalent under that exact bare name.
+The skills the agents follow ship inside the plugin, as `ai-workflow:tdd`, `ai-workflow:surgical-patch`, `ai-workflow:safe-refactor`, `ai-workflow:writing-for-agents` and `ai-workflow:handoff`. They're unmodified copies from mattpocock/skills (MIT) and JuliusBrussee/caveman (Apache-2.0); `third-party/README.md` lists versions and how to update them. The engineers, `qa-tester` and `ticket-reviewer` name theirs in `skills:`, which preloads them as subagents. As agent-team teammates `skills:` isn't applied, so they also carry the `Skill` tool and load them themselves. That tool puts your whole skill listing into every spawn, so keep your personal skills few (181 skills cost about 9k tokens per agent on Nov 9).
 
 ---
 
@@ -48,6 +56,7 @@ bash skills/jev/scripts/test_jev.sh          # stubbed curl, no network
 bash skills/linear/scripts/test_linear.sh    # stubbed curl, no network
 bash skills/orchestrator/scripts/test_cleanup.sh  # local git remote, stubbed gh
 bash skills/orchestrator/scripts/test_status.sh   # stubbed cmux and Linear
+bash skills/setup/scripts/test_check.sh           # bare and stubbed machines
 bunx tsc --noEmit -p .                       # local only: the engine's types in the repo root's .claude-plugin/types/ are gitignored
 ```
 

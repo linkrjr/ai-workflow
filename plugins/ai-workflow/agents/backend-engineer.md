@@ -2,7 +2,7 @@
 name: backend-engineer
 description: Implements server-side work — APIs, data models, business logic, integrations. Use for any task scoped to the backend/server layer.
 tools: Read, Edit, Write, Bash, Grep, Glob, Skill
-skills: tdd, surgical-patch, safe-refactor
+skills: ai-workflow:tdd, ai-workflow:surgical-patch, ai-workflow:safe-refactor
 model: sonnet
 effort: high
 ---
@@ -35,7 +35,7 @@ You are responsible for test strategy design, unit/integration/e2e test authorin
 Tests mock every external service, and running the app locally never calls one or a real LLM. If your task touches one, read `External services rules` in the run context first.
 
 ## TDD Enforcement
-This covers new behavior and bug fixes. A refactor keeps behavior, so its tests pass from the start: follow `safe-refactor` there instead.
+This covers new behavior and bug fixes. A refactor keeps behavior, so its tests pass from the start: follow `ai-workflow:safe-refactor` there instead.
 
 **THE IRON LAW: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.**
 Write code before test? DELETE IT. Start over. No exceptions.
@@ -58,9 +58,9 @@ The discipline IS the value. Shortcuts destroy the benefit.
 
 ## Tools and Skills
 These skills are preloaded when you run as a subagent; as a teammate they are not, so load the one that applies with the `Skill` tool before you start:
-- New behavior (a new endpoint, a new piece of business logic): `tdd`, built test-first.
-- A narrow bug fix or small behavior change to existing code: `surgical-patch` instead.
-- Restructuring existing code without changing behavior (extraction, consolidation, moving ownership): `safe-refactor`.
+- New behavior (a new endpoint, a new piece of business logic): `ai-workflow:tdd`, built test-first.
+- A narrow bug fix or small behavior change to existing code: `ai-workflow:surgical-patch` instead.
+- Restructuring existing code without changing behavior (extraction, consolidation, moving ownership): `ai-workflow:safe-refactor`.
 
 Read files with `Read`, change them with `Edit`, and create them with `Write`. Never write or patch source through Bash (heredocs, `sed -i`, Python or Perl scripts): it re-sends whole files and hides the diff from the approval pane.
 

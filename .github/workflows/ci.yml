@@ -19,6 +19,7 @@ jobs:
           bash skills/linear/scripts/test_linear.sh
           bash skills/orchestrator/scripts/test_cleanup.sh
           bash skills/orchestrator/scripts/test_status.sh
+          bash skills/setup/scripts/test_check.sh
       - name: Prompts use no working-directory script paths
         run: |
           if grep -rnE '(^|[^/}])scripts/(jev|linear|test_)' skills agents; then

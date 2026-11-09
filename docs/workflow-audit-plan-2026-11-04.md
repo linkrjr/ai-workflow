@@ -113,7 +113,8 @@ Follow-ups from the Nov 9 runs:
 - **Skill preloading doesn't reach teammates:** the orchestrator's agents run as agent-team teammates, and Claude Code doesn't apply `skills:` to those. The Phase 9 change had left them with no skills at all. The `Skill` tool is back on the engineers, `qa-tester` and `ticket-reviewer`, with `skills:` kept for subagent runs.
 - **Stated behaviour is a requirement:** `/workshop` now makes every testable statement an AC. Both gates treat a behaviour the spec states but the code doesn't do as a blocker, even outside the AC list.
 - **Reviewer bloat checks:** the Scope item now covers reimplemented helpers and dependencies a few lines would replace, as notes. A new item makes dead code the change leaves behind a blocker.
-- **Next:** a spec for a leaner team mode built on the tier 2 result.
+- **Portability:** the five skills the agents follow are now bundled in the plugin as `ai-workflow:*`. `tdd`, `writing-for-agents` and `handoff` are unmodified mattpocock/skills 1.3.1 (MIT), and `surgical-patch` and `safe-refactor` unmodified JuliusBrussee/caveman (Apache-2.0). Licences and provenance are in `third-party/`. Bundling avoids a `mattpocock-skills` dependency, which would have installed all 38 of its skills. Namespaced `skills:` preloading was confirmed with a probe. The new `/ai-workflow:setup` runs `skills/setup/scripts/check.sh`, the same script as the orchestrator's preflight, and installs what the user ticks. The startup hook shows a notice once per list of missing items. The user's personal `tdd`, `writing-for-agents` and `handoff` were moved to `~/.claude/cleanup-backup-2026-11-09/skills-now-bundled/`.
+- **Next:** the team mode spec is drafted at `/tmp/p9/team-mode-spec.md` and waiting for approval before it's saved to `docs/specs/team-mode.md`.
 
 ## Why this order
 

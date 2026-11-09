@@ -531,3 +531,34 @@ test('the band offers no answer when the ask would not fit on its row', async ($
   expect((await verdict).decision).toBe('deny')
   await ui.unmount()
 })
+
+test('a missing tool shows a setup notice once per list of missing items', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const store = new Map<string, unknown>()
+  on('store.get', (_: any, e: any) => ({ value: store.get(e.key) }))
+  on('store.set', (_: any, e: any) => (store.set(e.key, e.value), { value: undefined }))
+  let report = 'OK git: git\nMISSING gh: GitHub CLI (gh) — engineers can\'t open PRs\nSETUP: 1 MISSING\n'
+  const runs: string[][] = []
+  on('process.run', (_: any, e: any) => (runs.push(e.argv), { value: { exitCode: report.includes('READY') ? 0 : 1, stdout: report, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  const toasts: string[] = []
+  on('ui.toast', (_: any, e: any) => (toasts.push(e.text), { value: undefined }))
+  const settle = () => new Promise(resolve => setTimeout(resolve, 20))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await settle()
+  expect(runs[0]?.[1]).toMatch(/skills\/setup\/scripts\/check\.sh$/)
+  expect(toasts).toEqual(['ai-workflow: 1 missing (gh) — run /ai-workflow:setup'])
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await settle()
+  expect(toasts.length).toBe(1) // the same list: quiet
+
+  report = 'OK gh: GitHub CLI (gh)\nSETUP: READY\n'
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await settle()
+  report = 'MISSING gh: GitHub CLI (gh) — engineers can\'t open PRs\nSETUP: 1 MISSING\n'
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await settle()
+  expect(toasts.length).toBe(2) // fixed, then missing again: told again
+})
