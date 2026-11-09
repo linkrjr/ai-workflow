@@ -107,6 +107,14 @@ Phase 10 notes:
 - **Stale docs:** `TECH_DEBT_AUDIT.md` is deleted. It still described six agents and no runtime code, and `/workshop` reads it as input; `/audit` writes a fresh one. `examples/README.md` paths are updated.
 - **Version:** `ai-workflow` 2.0.0, because `/pomodoro` and its settings left the plugin and run state moved. `pomodoro` starts at 1.0.0. The README has an upgrade note.
 
+Follow-ups from the Nov 9 runs:
+- **Run 2 (`simple-test-todo-2`, 2.0.0 after the user's plugin cleanup):** 5 tasks, every gate clean on its first round. It cost $15.19 against run 1's $27.21 at the same prices, and took 58 minutes. The lead started at 52.7k tokens and agents at 12.4–14.2k. Final QA passed the save-error rule ("clears on the next successful action") as a note. Run 1's final gate had blocked it. That rule lives in the spec's Detailed behaviour, not in AC12.
+- **Tier 2 prototype (`simple-test-todo-3`, local only, `claude -p`):** one full-stack engineer built 10 tasks, then the final gate ran once. It cost $3.42, about $4.90 counting the reused design and the skipped graph, and took about 12 minutes. 59 tests and both type checks pass when rerun by hand, and both gates came back clean. It shipped the same save-error note.
+- **Skill preloading doesn't reach teammates:** the orchestrator's agents run as agent-team teammates, and Claude Code doesn't apply `skills:` to those. The Phase 9 change had left them with no skills at all. The `Skill` tool is back on the engineers, `qa-tester` and `ticket-reviewer`, with `skills:` kept for subagent runs.
+- **Stated behaviour is a requirement:** `/workshop` now makes every testable statement an AC. Both gates treat a behaviour the spec states but the code doesn't do as a blocker, even outside the AC list.
+- **Reviewer bloat checks:** the Scope item now covers reimplemented helpers and dependencies a few lines would replace, as notes. A new item makes dead code the change leaves behind a blocker.
+- **Next:** a spec for a leaner team mode built on the tier 2 result.
+
 ## Why this order
 
 - **Gates before optimization:** Phases 4–5 change what "clean" means, and Speed 2 and 3 are only safe once the final gate from Flaw 2 exists.

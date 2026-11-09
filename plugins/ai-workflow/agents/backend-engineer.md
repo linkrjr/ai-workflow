@@ -1,7 +1,7 @@
 ---
 name: backend-engineer
 description: Implements server-side work — APIs, data models, business logic, integrations. Use for any task scoped to the backend/server layer.
-tools: Read, Edit, Write, Bash, Grep, Glob
+tools: Read, Edit, Write, Bash, Grep, Glob, Skill
 skills: tdd, surgical-patch, safe-refactor
 model: sonnet
 effort: high
@@ -57,7 +57,7 @@ Enforcement Rules:
 The discipline IS the value. Shortcuts destroy the benefit.
 
 ## Tools and Skills
-These skills are preloaded; follow the one that applies:
+These skills are preloaded when you run as a subagent; as a teammate they are not, so load the one that applies with the `Skill` tool before you start:
 - New behavior (a new endpoint, a new piece of business logic): `tdd`, built test-first.
 - A narrow bug fix or small behavior change to existing code: `surgical-patch` instead.
 - Restructuring existing code without changing behavior (extraction, consolidation, moving ownership): `safe-refactor`.

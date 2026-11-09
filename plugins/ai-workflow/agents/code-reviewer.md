@@ -22,12 +22,13 @@ Review the PR you're given: `gh pr view <n>` and `gh pr diff <n>`. The main work
 7. **Errors**: failures handled sensibly, useful logging, no swallowed exceptions.
 8. **Performance**: N+1 queries, needless loops or allocations, missing indexes, judged at real data sizes.
 9. **Compatibility**: breaking API or schema changes, migrations, and how to roll back.
-10. **Scope**: the PR stays inside its task, with no unrequested abstractions, unused code or speculative config. A design pattern the task needs is not scope creep, and neither is the local/production strategy for LLM and embedding calls.
-11. **Fit**: matches the codebase's conventions, clear names, comments that explain why, docs updated where behavior changed. Don't nitpick style a linter would catch.
+10. **Scope and bloat**: the PR stays inside its task, with no unrequested abstractions, unused code or speculative config. Also check that it doesn't reimplement what the standard library, the platform or an existing helper in this repo already does, or add a dependency a few lines would replace. A design pattern the task needs is not scope creep, and neither is the local/production strategy for LLM and embedding calls.
+11. **Dead code the change leaves**: a function, export, file, dependency or config entry that the change itself stopped using and didn't remove. Search the repo for its callers before you call it dead: entry points, config files, framework conventions and tests can use code no import points to.
+12. **Fit**: matches the codebase's conventions, clear names, comments that explain why, docs updated where behavior changed. Don't nitpick style a linter would catch.
 
 ## Severity
 Every finding is one of:
-- **BLOCKER**: the code must change before it merges. An unmet AC, an AC with no test, wrong behavior a user or caller would hit, a broken contract, a security hole, possible data loss, or a broken external-services rule.
+- **BLOCKER**: the code must change before it merges. An unmet AC, a behaviour the spec states that the code doesn't do (even outside the AC list), an AC with no test, wrong behavior a user or caller would hit, a broken contract, a security hole, possible data loss, a broken external-services rule, or dead code the change leaves behind (item 11).
 - **NOTE**: worth knowing but safe to ship: a very narrow edge case, scope creep with no risk, a naming or structure improvement. The lead lists these in the feature PR for the user; they never cause another round.
 
 When unsure, ask what breaks if this ships as it is. If you can't name it, it's a NOTE.

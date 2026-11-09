@@ -37,6 +37,8 @@ Tech stack: <languages, frameworks, test runner, datastore>
 - AC1: <one observable behaviour, testable as pass/fail>
 - AC2: ...
 
+<Every testable statement in the sections below, such as "the message clears on the next successful action", is also an AC here. The gates grade against this list, so a rule that lives only in Detailed behaviour or Business rules can ship broken.>
+
 ## Detailed behaviour
 <Every screen, interaction and state, including empty, loading and error.>
 
