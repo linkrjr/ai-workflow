@@ -645,3 +645,10 @@ test("the header names the run's mode and an engineer's box counts its tasks", a
   expect(await text(/AGENT TEAMS/)).toBe('AGENT TEAMS - OPUS 5.5 TEAM MODE')
   await ui.unmount()
 })
+
+test("a gate that can't run its checks refuses the completion instead of passing it", async ($, on) => {
+  on('process.run', () => ({ deny: 'ENOENT: no such directory /repo.worktrees/eng-1' }))
+  on('classic.TaskCompleted', () => ({}))
+  const r = await $.classic.TaskCompleted(buildTask)
+  expect(r.block).toContain(`couldn't run the checks for "T1 Add todo"`)
+})

@@ -347,6 +347,12 @@ export const register: Register = (on, options) => {
     const r = await next(e)
     return block ? { ...r, block } : r
   })
+    // A gate that can't run its checks (a worktree that's gone, a command that won't start)
+    // refuses the completion instead of letting the task through unchecked.
+    .catch(async ($, e, next) => ({
+      ...(await next(e)),
+      block: `The task gate couldn't run the checks for "${e.task_subject}": ${String(next.error ?? 'unknown error')}. Check the task's Worktree: line, then mark it complete again; if it keeps failing, SendMessage the lead.`,
+    }))
 
   on('session.start', async ($, e, next) => {
     // The orchestrator reads the plan's limits through this to pause before one runs out.

@@ -22,16 +22,15 @@ jobs:
           bash skills/setup/scripts/test_check.sh
       - name: Prompts use no working-directory script paths
         run: |
-          if grep -rnE '(^|[^/}])scripts/(jev|linear|test_)' skills agents; then
-            echo "Use \${CLAUDE_PLUGIN_ROOT} or \${CLAUDE_SKILL_DIR}; agents read the path from the run context."
-            exit 1
-          fi
+          # grep exits 1 on no match; anything else (a match, or a path that no longer exists) fails the step.
+          out=$(grep -rnE '(^|[^/}])scripts/(jev|linear|test_)' skills agents) && {
+            echo "$out"; echo "Use \${CLAUDE_PLUGIN_ROOT} or \${CLAUDE_SKILL_DIR}; agents read the path from the run context."; exit 1
+          } || [ $? -eq 1 ]
       - name: Prompts use the per-spec run state
         run: |
-          if grep -rnE 'tmp/team/(handoff|design|review|qa|jev|ticket|feature)' skills agents ../../README.md; then
-            echo "Run state lives in tmp/team/<spec slug>/; see skills/orchestrator/SKILL.md."
-            exit 1
-          fi
+          out=$(grep -rnE 'tmp/team/(handoff|design|review|qa|jev|ticket|feature)' skills agents ../../README.md) && {
+            echo "$out"; echo "Run state lives in tmp/team/<spec slug>/; see skills/orchestrator/SKILL.md."; exit 1
+          } || [ $? -eq 1 ]
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
       - name: Validate the marketplace and plugins
