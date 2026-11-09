@@ -247,6 +247,35 @@ async function setupNotice($: EngineInterface) {
   }
 }
 
+// Team mode's task gate: the orchestrator's lead writes these lines into a task's description.
+//   Checks: <shell command>  — a build task completes only while it exits 0, run in `Worktree:`
+//   Worktree: <path>         — where the checks run (the session's folder without it)
+//   Verdict file: <path>     — a review or QA task completes only once this file exists
+// The text returned blocks the completion and reaches the teammate; undefined lets it through.
+const GATE_TRIES = 3
+const failedChecks = new Map<string, number>() // task id → failed completions in a row
+const field = (text: string | undefined, name: string) =>
+  text?.split('\n').find(l => l.startsWith(`${name}:`))?.slice(name.length + 1).trim() || undefined
+async function taskGate($: EngineInterface, e: { task_id: string; task_subject: string; task_description?: string; cwd: string }) {
+  const verdict = field(e.task_description, 'Verdict file')
+  if (verdict && !(await $.fs.exists(verdict))) return `Write your verdict to ${verdict} before completing "${e.task_subject}".`
+  const checks = field(e.task_description, 'Checks')
+  if (!checks) return undefined
+  const r = await $.process.run(['bash', '-c', checks], { cwd: field(e.task_description, 'Worktree') ?? e.cwd, timeoutMs: 600_000 }) // the host caps a run at 10 min
+  if (r.exitCode === 0) {
+    failedChecks.delete(e.task_id)
+    return undefined
+  }
+  const n = (failedChecks.get(e.task_id) ?? 0) + 1
+  failedChecks.set(e.task_id, n)
+  const out = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-40).join('\n')
+  const next =
+    n >= GATE_TRIES
+      ? `This is failure ${n} of ${GATE_TRIES}: stop, and SendMessage the lead "CHECKS STUCK: ${e.task_subject}" with the failing output.`
+      : `Failure ${n} of ${GATE_TRIES}: fix it, then mark the task complete again.`
+  return `"${e.task_subject}" can't complete: \`${checks}\` exited ${r.exitCode}.\n${out}\n${next}`
+}
+
 // The agent teams row above the prompt, or undefined when it has nothing to show.
 async function bandRow($: EngineInterface, e: RenderInput<'AbovePrompt'>, isAlwaysOn: boolean) {
   const a = (await read($, asks)).find(x => x.isAnswerable)
@@ -291,6 +320,12 @@ export const register: Register = (on, options) => {
   let mode: string | undefined
   on('classic.SessionStart', ($, e, next) => ((mode = e.permission_mode), next(e)))
   on('classic.UserPromptSubmit', ($, e, next) => ((mode = e.permission_mode), next(e)))
+
+  on('classic.TaskCompleted', async ($, e, next) => {
+    const block = await taskGate($, e)
+    const r = await next(e)
+    return block ? { ...r, block } : r
+  })
 
   on('session.start', async ($, e, next) => {
     // The orchestrator reads the plan's limits through this to pause before one runs out.

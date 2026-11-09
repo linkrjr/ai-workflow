@@ -562,3 +562,45 @@ test('a missing tool shows a setup notice once per list of missing items', async
   await settle()
   expect(toasts.length).toBe(2) // fixed, then missing again: told again
 })
+
+const ok = (stdout = '') => ({ value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
+const failed = (stdout: string) => ({ value: { exitCode: 1, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
+const buildTask = { task_id: 't1', task_subject: 'T1 Add todo', task_description: 'AC1\nChecks: bun run test && bun run typecheck\nWorktree: /repo.worktrees/eng-1' }
+
+test('a build task completes only while its checks pass, in its worktree', async ($, on) => {
+  let isPassing = false
+  const runs: { argv: readonly string[]; cwd?: string }[] = []
+  on('process.run', (_: any, e: any) => (runs.push({ argv: e.argv, cwd: e.init?.cwd }), isPassing ? ok() : failed('1 test failed: adds a todo')))
+  on('classic.TaskCompleted', () => ({}))
+
+  const r1 = await $.classic.TaskCompleted(buildTask)
+  expect(runs[0]).toEqual({ argv: ['bash', '-c', 'bun run test && bun run typecheck'], cwd: '/repo.worktrees/eng-1' })
+  expect(r1.block).toContain('exited 1')
+  expect(r1.block).toContain('1 test failed: adds a todo')
+  expect(r1.block).toContain('Failure 1 of 3')
+
+  isPassing = true
+  expect((await $.classic.TaskCompleted(buildTask)).block).toBeUndefined()
+})
+
+test('the third failed completion of a task tells the engineer to go to the lead', async ($, on) => {
+  on('process.run', () => failed('typecheck: 2 errors'))
+  on('classic.TaskCompleted', () => ({}))
+  await $.classic.TaskCompleted(buildTask)
+  await $.classic.TaskCompleted(buildTask)
+  const r = await $.classic.TaskCompleted(buildTask)
+  expect(r.block).toContain('failure 3 of 3')
+  expect(r.block).toContain('CHECKS STUCK: T1 Add todo')
+})
+
+test('a review task completes only once its verdict file exists, and other tasks pass through', async ($, on) => {
+  let isWritten = false
+  on('fs.exists', () => ({ value: isWritten }))
+  on('process.run', () => ok())
+  on('classic.TaskCompleted', () => ({}))
+  const review = { task_id: 'r1', task_subject: 'Final review', task_description: 'Verdict file: /repo/tmp/team/x/final-review-round-1.md' }
+  expect((await $.classic.TaskCompleted(review)).block).toBe('Write your verdict to /repo/tmp/team/x/final-review-round-1.md before completing "Final review".')
+  isWritten = true
+  expect((await $.classic.TaskCompleted(review)).block).toBeUndefined()
+  expect((await $.classic.TaskCompleted({ task_id: 'x', task_subject: 'Plain task' })).block).toBeUndefined()
+})

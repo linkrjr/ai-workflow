@@ -16,6 +16,8 @@ export const AGENT_ICONS: Record<string, Icon> = {
   'ticket-reviewer': { file: 'ticket-reviewer.png', glyph: '' }, // nf-fa-bug
   designer: { file: 'designer.png', glyph: '' }, // nf-fa-paint_brush
   'backend-engineer': { file: 'backend-engineer.png', glyph: '' }, // nf-fa-server
+  // no icon of its own yet: the backend one
+  'fullstack-engineer': { file: 'backend-engineer.png', glyph: '' }, // nf-fa-server
   'frontend-engineer': { file: 'frontend-engineer.png', glyph: '' }, // nf-cod-browser
   'code-reviewer': { file: 'code-reviewer.png', glyph: '' }, // nf-fa-search
   'qa-tester': { file: 'qa-tester.png', glyph: '' }, // nf-fa-flask

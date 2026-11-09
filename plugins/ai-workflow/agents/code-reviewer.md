@@ -39,6 +39,13 @@ From round 2 on, your brief names your earlier reports. Each report's `Commit:` 
 ## Final gate
 A brief may name a final gate instead of a PR. Then there is no PR or task doc: fetch, then review `git diff <base commit>...origin/<base>` against every AC in the run context. Each task was already reviewed alone, so look for what only shows once they are together: an AC split across tasks that doesn't add up, a frontend/backend contract mismatch, tasks that duplicate or undo each other, a caller a later task broke. Report `Final gate round: <R>` in place of `PR` and `Round`.
 
+## Team mode
+A brief that starts "Team mode" is a final gate whose fixes you route yourself; nobody relays them for you.
+- Send each blocker straight to the engineer who owns its file (`Engineers:` in the run context) with SendMessage: `BLOCKER <file:line>: <defect>`. Then send the lead one line: `ROUND <R>: VERDICT: <CLEAN | FINDINGS> — <path>`.
+- When an engineer replies `Fixed: ... in <commit>`, re-check only that fix (`git diff <commit you reviewed>..<new head>`, the whole branch again if that range holds a merge of other work), and write the next round's file, `final-review-round-<R+1>.md`. A blocker that comes back after it was reported fixed is marked `REPEATED` in that file.
+- Stop after the round where nothing is open, or when the lead tells you to. Mark your gate task complete once your latest verdict file is written: the plugin refuses the completion until it exists.
+- A `DISPUTE:` from an engineer: drop the blocker if its evidence holds, otherwise keep it and say why. Either way, put the dispute in the next round's file.
+
 ## Output
 Write your result to the file path the lead gives you:
 

@@ -114,7 +114,12 @@ Follow-ups from the Nov 9 runs:
 - **Stated behaviour is a requirement:** `/workshop` now makes every testable statement an AC. Both gates treat a behaviour the spec states but the code doesn't do as a blocker, even outside the AC list.
 - **Reviewer bloat checks:** the Scope item now covers reimplemented helpers and dependencies a few lines would replace, as notes. A new item makes dead code the change leaves behind a blocker.
 - **Portability:** the five skills the agents follow are now bundled in the plugin as `ai-workflow:*`. `tdd`, `writing-for-agents` and `handoff` are unmodified mattpocock/skills 1.3.1 (MIT), and `surgical-patch` and `safe-refactor` unmodified JuliusBrussee/caveman (Apache-2.0). Licences and provenance are in `third-party/`. Bundling avoids a `mattpocock-skills` dependency, which would have installed all 38 of its skills. Namespaced `skills:` preloading was confirmed with a probe. The new `/ai-workflow:setup` runs `skills/setup/scripts/check.sh`, the same script as the orchestrator's preflight, and installs what the user ticks. The startup hook shows a notice once per list of missing items. The user's personal `tdd`, `writing-for-agents` and `handoff` were moved to `~/.claude/cleanup-backup-2026-11-09/skills-now-bundled/`.
-- **Next:** the team mode spec is drafted at `/tmp/p9/team-mode-spec.md` and waiting for approval before it's saved to `docs/specs/team-mode.md`.
+- **Team mode (`docs/specs/team-mode.md`, approved):** built and checked only by unit tests so far.
+  - `/orchestrator` now starts in `skills/orchestrator/team-mode.md`. The per-task flow is unchanged and runs when the user picks it or when an older run resumes.
+  - New `fullstack-engineer` agent.
+  - The `TaskCompleted` gate in the hooks module: it runs the task's `Checks:` in its `Worktree:`, refuses three times and then sends the engineer to the lead, and requires a `Verdict file:` before a review or QA task completes. Three new tests cover it.
+  - The reviewer and QA gained a "Team mode" final gate in which they message engineers directly.
+  - Untested live: whether `TaskCompleted` fires for in-process teammates, whether `subagentPromptCacheTtl` written to `.claude/settings.local.json` before spawning takes effect, and the engineers' fetch, merge and push onto the shared feature branch. AC26's interactive run on the todo spec tests all three.
 
 ## Why this order
 
