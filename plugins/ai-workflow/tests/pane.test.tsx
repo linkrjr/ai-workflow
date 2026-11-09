@@ -77,7 +77,8 @@ test('the pane shows the leader and each subagent it started', async ($, on) => 
     const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
     expect(await text(/AGENT TEAMS/)).toBe('AGENT TEAMS - OPUS 5.5 IDLE')
     expect(await text(/^Backend/)).toMatch(/^Backend - Sonnet 5\.5 - \d+s - Running$/)
-    expect(await text(/%$/)).toBe(`${'█'.repeat(4)}${'░'.repeat(16)} 19%`)
+    expect(await text(/^Now:/)).toMatch(/^Now: Bash → ls · \d+s ago$/)
+    expect(await text(/^Tasks:/)).toBeUndefined() // no task list: no count
     expect(await text(/^Tokens: 2/)).toBe('Tokens: 2.0k (1.0k in / 1.0k out)')
     // 1000 in at $2/M + 1000 out at $10/M
     expect(await text(/^Cost: \$0\.0120/)).toBe('Cost: $0.0120 (1.0k×$2/M + 1.0k×$10/M)')
@@ -603,4 +604,44 @@ test('a review task completes only once its verdict file exists, and other tasks
   isWritten = true
   expect((await $.classic.TaskCompleted(review)).block).toBeUndefined()
   expect((await $.classic.TaskCompleted({ task_id: 'x', task_subject: 'Plain task' })).block).toBeUndefined()
+})
+
+test("the header names the run's mode and an engineer's box counts its tasks", async ($, on) => {
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('agent.spawn', () => ({ model: 'claude-sonnet-5-5', agentId: 'e1' }))
+  let state = 'Mode: team, fallback\nFeature PR: none\n'
+  on('fs.list', () => ({ value: [{ name: 'todo-app', kind: 'dir', size: 0, mtimeMs: 1, isLink: false }, { name: 'defaults.md', kind: 'file', size: 1, mtimeMs: 1, isLink: false }] }))
+  on('fs.exists', (_: any, e: any) => ({ value: e.path.endsWith('tmp/team/todo-app/state.md') }))
+  on('fs.stat', () => ({ value: { kind: 'file', size: 1, mtimeMs: 1, isLink: false } }))
+  on('fs.read', () => ({ value: state }))
+  let now = 0
+  on('clock.now', () => ({ value: now }))
+  on('tool.call', { tool: 'TaskCreate' }, () => ({ result: 'created' }))
+  on('tool.call', { tool: 'TaskUpdate' }, (_: any, e: any) => (e.taskId === '9' ? { isError: true, result: 'refused' } : { result: 'ok' }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  // The lead plans two tasks for eng and one for eng-2.
+  for (const who of ['eng', 'eng', 'eng-2']) {
+    await $.tool.call({ tool: 'TaskCreate', subject: 'T', description: `ACs: AC1\nEngineer: ${who}\nChecks: x` } as any)
+  }
+  await $.agent.spawn({ tool_use_id: 't1', prompt: 'go', description: 'build', name: 'eng', subagentType: 'ai-workflow:fullstack-engineer', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'claude-opus-5-5', background: true, fork: false })
+  // A completion the gate refused doesn't count; the accepted one does, once.
+  await $.tool.call({ tool: 'TaskUpdate', taskId: '9', status: 'completed', agentId: 'e1' } as any)
+  await $.tool.call({ tool: 'TaskUpdate', taskId: '1', status: 'completed', agentId: 'e1' } as any)
+  await $.tool.call({ tool: 'TaskUpdate', taskId: '1', status: 'completed', agentId: 'e1' } as any)
+
+  let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
+  expect(await text(/AGENT TEAMS/)).toBe('AGENT TEAMS - OPUS 5.5 FALLBACK MODE')
+  expect(await text(/^Tasks:/)).toBe('Tasks: 1 of 2 done')
+  expect(await text(/^Now:/)).toBe('Now: TaskUpdate · 0s ago')
+  await ui.unmount()
+
+  state = 'Mode: team\n'
+  now = 10_000 // past the 5 s re-read
+  ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(/AGENT TEAMS/)).toBe('AGENT TEAMS - OPUS 5.5 TEAM MODE')
+  await ui.unmount()
 })

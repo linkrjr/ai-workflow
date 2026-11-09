@@ -21,6 +21,8 @@ const LOG_ROWS = 10
 const isLogOpen = atom({ plugin: 'ai-workflow', key: 'isLogOpen' } as const, true)
 // Whether the pane is open, so the band above the prompt can offer to open it.
 const isPaneOpen = atom({ plugin: 'ai-workflow', key: 'isPaneOpen' } as const, false)
+// Team mode: build tasks per engineer name, from the lead's TaskCreate calls (`Engineer: <name>`).
+const planned = atom({ plugin: 'ai-workflow', key: 'planned' } as const, {} as Record<string, number>)
 const ASK_COLOR = 'yellow'
 // How long the pane waits for Proceed / Cancel before the engine's own prompt asks.
 const ASK_WAIT_S = 600
@@ -98,16 +100,9 @@ const costLine = (tokens: number[], model: string) => {
   return parts.length ? `$${cost.toFixed(4)} (${parts.join(' + ')})` : '$0.0000'
 }
 
-const BAR = 20
-
 // This plugin's agents by name; another plugin's type has no icon.
 const agentIcon = (type: string) =>
   type.startsWith('ai-workflow:') ? AGENT_ICONS[type.slice('ai-workflow:'.length)] : undefined
-
-// Simulated: no real progress signal exists, so each step start and each tool call
-// closes 10% of the gap; a finished turn fills it.
-const progress = (s: Subagent) =>
-  s.status === 'completed' ? 1 : 1 - Math.pow(0.9, s.steps)
 
 const formatTokens = (n: number) =>
   n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : `${n}`
@@ -274,6 +269,32 @@ async function taskGate($: EngineInterface, e: { task_id: string; task_subject: 
       ? `This is failure ${n} of ${GATE_TRIES}: stop, and SendMessage the lead "CHECKS STUCK: ${e.task_subject}" with the failing output.`
       : `Failure ${n} of ${GATE_TRIES}: fix it, then mark the task complete again.`
   return `"${e.task_subject}" can't complete: \`${checks}\` exited ${r.exitCode}.\n${out}\n${next}`
+}
+
+// The orchestrator's run mode for the pane's header, from the newest run state in tmp/team/:
+// `Mode: team` is team mode, `Mode: team, fallback` the fallback, no Mode line the per-task flow.
+// Read at most every 5 s. ponytail: the newest state.md wins when several specs ran in this folder
+let modeRead: { at: number; mode?: string } = { at: -Infinity }
+async function runMode($: EngineInterface, now: number) {
+  if (Math.abs(now - modeRead.at) < 5000) return modeRead.mode
+  let mode: string | undefined
+  try {
+    let newest: { path: string; at: number } | undefined
+    for (const d of await $.fs.list('tmp/team')) {
+      const path = `tmp/team/${d.name}/state.md`
+      if (d.kind !== 'dir' || !(await $.fs.exists(path))) continue
+      const at = (await $.fs.stat(path)).mtimeMs
+      if (!newest || at > newest.at) newest = { path, at }
+    }
+    if (newest) {
+      const line = String(await $.fs.read(newest.path)).split('\n').find(l => l.startsWith('Mode:'))
+      mode = !line ? 'per-task flow' : line.includes('fallback') ? 'fallback mode' : 'team mode'
+    }
+  } catch {
+    // no run state here: the header shows the leader's status
+  }
+  modeRead = { at: now, mode }
+  return mode
 }
 
 // The agent teams row above the prompt, or undefined when it has nothing to show.
@@ -477,15 +498,30 @@ export const register: Register = (on, options) => {
   })
 
   on('tool.call', async ($, e, next) => {
+    const input = e as unknown as Record<string, unknown>
+    const call = describeCall(e.tool, input)
+    const sub = (await read($, subagents)).find(a => a.id === e.agentId)
+    // What the agent is doing now, shown in its box while the call runs.
+    if (sub) {
+      const at = await $.clock.now()
+      await patch($, sub.id, a => ({ ...a, doing: call, doingAt: at }))
+    }
     // ponytail: an approved call stays listed until it finishes (a long Bash too); clear on
     // approval if an event for the person's answer turns up
     const r = await next(e).finally(() => update($, asks, all => all.filter(a => a.id !== e.tool_use_id)))
-    const sub = (await read($, subagents)).find(a => a.id === e.agentId)
+    const isOk = r.deny === undefined && r.isError !== true
     if (sub) {
       await patch($, sub.id, a => ({ ...a, steps: a.steps + 1 }))
-      const call = describeCall(e.tool, e as unknown as Record<string, unknown>)
       if (r.deny !== undefined) await say($, sub.who, `${call}  denied`, true)
       else await say($, sub.who, r.isError ? `${call}  ✗` : call, r.isError === true)
+      // A completion the task gate refused comes back as an error, so it doesn't count.
+      const id = String(input.taskId ?? '')
+      if (e.tool === 'TaskUpdate' && input.status === 'completed' && isOk && id) {
+        await patch($, sub.id, a => ({ ...a, tasksDone: [...new Set([...(a.tasksDone ?? []), id])] }))
+      }
+    } else if (!e.agentId && e.tool === 'TaskCreate' && isOk) {
+      const name = /^Engineer:\s*(\S+)/m.exec(String(input.description ?? ''))?.[1]
+      if (name) await update($, planned, p => ({ ...p, [name]: (p[name] ?? 0) + 1 }))
     }
     return r
   }).catch(($, e, next) => next(e)) // a panel bug must never block a tool
@@ -552,6 +588,8 @@ export const register: Register = (on, options) => {
     const model = shortName(await $.session.model())
     await read($, tick) // redraw on every tick while anything runs
     const now = await $.clock.now()
+    const mode = await runMode($, now)
+    const plan = await read($, planned)
     const lead = await read($, leader)
     const all = await read($, subagents)
     const taskTime =
@@ -568,7 +606,7 @@ export const register: Register = (on, options) => {
           {icon('team', TEAM_ICON, TEAM_ICON_SIZE)}
           <Box marginLeft={Image ? 2 : 0} flexDirection="column">
             <Text>
-              <Text bold>AGENT TEAMS</Text> - {model} <Text bold color={LEADER_COLOR}>{lead.status.toUpperCase()}</Text>
+              <Text bold>AGENT TEAMS</Text> - {model} <Text bold color={LEADER_COLOR}>{(mode ?? lead.status).toUpperCase()}</Text>
             </Text>
             <Text>
               <Text color={LEADER_COLOR}>●</Text> leader  <Text color={AGENTS_COLOR}>●</Text> agents
@@ -640,8 +678,8 @@ export const register: Register = (on, options) => {
         <Box width="100%" flexDirection="column" borderStyle="round" borderColor={AGENTS_COLOR} paddingX={1}>
           {subs.length === 0 && <Text dimColor>No running subagents.</Text>}
           {subs.map(s => {
-            const done = Math.round(progress(s) * BAR)
             const agent = agentIcon(s.type)
+            const total = plan[s.name]
             return (
               <Box borderStyle="single" paddingX={1}>
                 {Image && agent && (
@@ -655,10 +693,15 @@ export const register: Register = (on, options) => {
                     {formatDuration(now - s.spawnedAt)} -{' '}
                     <Text bold color={STATUS_COLOR[s.status]}>{capitalize(s.status)}</Text>
                   </Text>
-                  <Text>
-                    <Text color="cyan">{'█'.repeat(done)}</Text>
-                    <Text dimColor>{'░'.repeat(BAR - done)}</Text> {Math.round(progress(s) * 100)}%
+                  <Text wrap="truncate-end">
+                    <Text bold>Now:</Text> {s.doing ?? 'Thinking'}
+                    {s.doingAt !== undefined && <Text dimColor> · {formatDuration(now - s.doingAt)} ago</Text>}
                   </Text>
+                  {total !== undefined && (
+                    <Text>
+                      <Text bold>Tasks:</Text> {s.tasksDone?.length ?? 0} of {total} done
+                    </Text>
+                  )}
                   <Text><Text bold>Tokens:</Text> {tokenLine(s.tokens)}</Text>
                   <Text><Text bold>Cost:</Text> {costLine(s.tokens, s.model)}</Text>
                   <Text><Text bold>Effort:</Text> {s.effort ? capitalize(s.effort) : '—'}</Text>

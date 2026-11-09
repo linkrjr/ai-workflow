@@ -12,6 +12,11 @@ export type Subagent = {
   // the task in a few words, as the session log names the agent
   who: string
   spawnedAt: number
+  // its latest tool call, as the session log words it, and when it started
+  doing?: string
+  doingAt?: number
+  // team mode: the task-list ids it completed
+  tasksDone?: string[]
 }
 
 // The main session's own loop: what the leader box shows.
@@ -45,6 +50,6 @@ export type LogLine = { at: number; who: string; text: string; isError: boolean 
 
 declare module 'claude-code' {
   interface PluginState {
-    'ai-workflow': { subagents: Subagent[]; log: LogLine[]; leader: Leader; tick: number; asks: Ask[]; isLogOpen: boolean; isPaneOpen: boolean }
+    'ai-workflow': { subagents: Subagent[]; log: LogLine[]; leader: Leader; tick: number; asks: Ask[]; isLogOpen: boolean; isPaneOpen: boolean; planned: Record<string, number> }
   }
 }
