@@ -491,7 +491,7 @@ export const register: Register = (on, options) => {
 
   // Compaction is refused while a turn runs, so the tool only books it for the turn's end.
   let compactAfterTurn: { instructions?: string } | undefined
-  // @ts-expect-error TS2589: the engine's tool.call types recurse too deep for tsc
+  // @ts-ignore TS2589 (types recurse too deep) only when a session rewrote the MCP types with every connected server
   on('tool.call', { tool: /^mcp__ai-workflow__compact$/ }, async (_, e) => {
     const instructions = (e as { instructions?: unknown }).instructions
     compactAfterTurn = typeof instructions === 'string' ? { instructions } : {}

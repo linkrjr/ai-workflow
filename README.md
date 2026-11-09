@@ -45,7 +45,7 @@ The skills the agents follow ship inside the plugin, as `ai-workflow:tdd`, `ai-w
 
 ## Running the Tests
 
-There is no `package.json`, so `bun test` can't find the engine's test kit. Run these instead; CI (`.github/workflows/ci.yml`) runs all but the type check:
+There is no `package.json`, so `bun test` can't find the engine's test kit. Run these instead; CI (`.github/workflows/ci.yml`) runs all of them:
 
 ```sh
 claude plugin validate .                     # the marketplace, from the repo root
@@ -58,8 +58,11 @@ bash skills/linear/scripts/test_linear.sh    # stubbed curl, no network
 bash skills/orchestrator/scripts/test_cleanup.sh  # local git remote, stubbed gh
 bash skills/orchestrator/scripts/test_status.sh   # stubbed cmux and Linear
 bash skills/setup/scripts/test_check.sh           # bare and stubbed machines
-bunx tsc --noEmit -p .                       # local only: the engine's types in the repo root's .claude-plugin/types/ are gitignored
+bunx --package typescript@5.8.3 tsc --noEmit -p .   # against the engine's types committed in engine-types/
 ```
+
+
+**The engine's types** (`engine-types/`, a copy of what Claude Code writes to `.claude-plugin/types/`) are committed so CI and a fresh clone can type-check. Both plugins' `tsconfig.json` extend `engine-types/tsconfig.json`, and the repo root's `.claude-plugin/` holds only `marketplace.json`. Claude Code writes its own copy beside each plugin it loads from a folder you own, such as `plugins/ai-workflow/.claude-plugin/types/` after a `--plugin-dir` session. Its own `.gitignore` keeps that copy out of git, and a plugin installed from the marketplace never gets one. To move to a newer API, copy `claude-code/` and `claude-code-tools/` from there into `engine-types/`, and keep `engine-types/claude-code-mcp/` trimmed to this plugin's own tools.
 
 ---
 

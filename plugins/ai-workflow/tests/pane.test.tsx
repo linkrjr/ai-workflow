@@ -69,7 +69,7 @@ test('the pane shows the leader and each subagent it started', async ($, on) => 
     agentId: 'a1',
   }));
 
-  // @ts-expect-error TS2589: the engine's tool.call types recurse too deep for tsc
+  // @ts-ignore TS2589 (types recurse too deep) only when a session rewrote the MCP types with every connected server
   await $.tool.call({ tool: 'Bash', command: 'ls', agentId: 'a1' })
 
   for (const surface of ['terminal', 'desktop'] as const) {

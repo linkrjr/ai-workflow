@@ -13,6 +13,7 @@ jobs:
         working-directory: plugins/ai-workflow
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
       - name: Script tests
         run: |
           bash skills/jev/scripts/test_jev.sh
@@ -31,6 +32,10 @@ jobs:
           out=$(grep -rnE 'tmp/team/(handoff|design|review|qa|jev|ticket|feature)' skills agents ../../README.md) && {
             echo "$out"; echo "Run state lives in tmp/team/<spec slug>/; see skills/orchestrator/SKILL.md."; exit 1
           } || [ $? -eq 1 ]
+      - name: Type check
+        run: |
+          bunx --package typescript@5.8.3 tsc --noEmit -p .
+          bunx --package typescript@5.8.3 tsc --noEmit -p ../pomodoro
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
       - name: Validate the marketplace and plugins
