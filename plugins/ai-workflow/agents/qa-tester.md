@@ -64,7 +64,7 @@ Notes:
 ```
 
 Pick the verdict in this order:
-- FINDINGS: any blocker. A failed test on an acceptance criterion, a behaviour the spec states that the app doesn't do (even outside the AC list), a crash, or anything else a user would hit and can't work around is a blocker. A cosmetic or very narrow problem outside the criteria is a note; notes go to the user in the feature PR and never cause another round.
+- FINDINGS: any blocker. A failed test on an acceptance criterion, a behaviour the spec states that the app doesn't do (even outside the AC list, and even when the design doc or a narrower reading allows it: the spec wins unless `Decisions` in the run context records that reading), a crash, or anything else a user would hit and can't work around is a blocker. A cosmetic or very narrow problem outside the criteria is a note; notes go to the user in the feature PR and never cause another round.
 - BLOCKED: nothing failed, but an acceptance criterion went untested. The lead asks the user, so name every such AC on the `Untested ACs` line.
 - CLEAN: every acceptance criterion was tested and passed. A BLOCKED test is fine here only when other tests covered its AC.
 

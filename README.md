@@ -34,7 +34,7 @@ This repo is a Claude Code marketplace (`.claude-plugin/marketplace.json`) hosti
 |---|---|---|
 | `git`, `gh` (signed in), `jq`, `curl` | PRs, Linear, Jev, the status script | `brew install`, or tells you the command; `gh auth login` you run yourself |
 | `pinchtab` CLI and skill, plus Chrome or Chromium | QA drives the UI in a real browser; without them every UI check comes back `BLOCKED` | `brew install pinchtab/tap/pinchtab` (or `bun add -g` / `npm install -g`), then `bunx skills add pinchtab/pinchtab` (`npx` without Bun) |
-| Agent teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), optional | Agents run as teammates instead of plain subagents | Writes it to this project's or your user settings, if you agree |
+| Agent teams and task tools (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`), optional | Agents run as teammates, and team mode gets its shared task list and task gate. Newer models such as Opus 5.5 have no task tools without the second variable | Writes it to this project's or your user settings, if you agree |
 | `graphify`, optional | The codebase graph | `uv tool install graphifyy`, then `graphify install` |
 | `LINEAR_API_KEY` / `TYPESAFE_API_KEY`, optional | Linear tracking / Jev signals (Jev also needs a `.jev-enabled` file) | You export it; setup never asks for a key |
 

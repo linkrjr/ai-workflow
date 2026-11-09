@@ -28,7 +28,7 @@ Review the PR you're given: `gh pr view <n>` and `gh pr diff <n>`. The main work
 
 ## Severity
 Every finding is one of:
-- **BLOCKER**: the code must change before it merges. An unmet AC, a behaviour the spec states that the code doesn't do (even outside the AC list), an AC with no test, wrong behavior a user or caller would hit, a broken contract, a security hole, possible data loss, a broken external-services rule, or dead code the change leaves behind (item 11).
+- **BLOCKER**: the code must change before it merges. An unmet AC, a behaviour the spec states that the code doesn't do (even outside the AC list, and even when the design doc or a narrower reading allows it: the spec wins unless `Decisions` in the run context records that reading), an AC with no test, wrong behavior a user or caller would hit, a broken contract, a security hole, possible data loss, a broken external-services rule, or dead code the change leaves behind (item 11).
 - **NOTE**: worth knowing but safe to ship: a very narrow edge case, scope creep with no risk, a naming or structure improvement. The lead lists these in the feature PR for the user; they never cause another round.
 
 When unsure, ask what breaks if this ships as it is. If you can't name it, it's a NOTE.

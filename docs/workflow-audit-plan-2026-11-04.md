@@ -120,6 +120,15 @@ Follow-ups from the Nov 9 runs:
   - The `TaskCompleted` gate in the hooks module: it runs the task's `Checks:` in its `Worktree:`, refuses three times and then sends the engineer to the lead, and requires a `Verdict file:` before a review or QA task completes. Three new tests cover it.
   - The reviewer and QA gained a "Team mode" final gate in which they message engineers directly.
   - Untested live: whether `TaskCompleted` fires for in-process teammates, whether `subagentPromptCacheTtl` written to `.claude/settings.local.json` before spawning takes effect, and the engineers' fetch, merge and push onto the shared feature branch. AC26's interactive run on the todo spec tests all three.
+- **Team mode test run (`simple-test-todo-4`, Nov 9, AC26):**
+  - **Result:** $7.47 (target $7.60) and about 28 minutes (target 30), including the user's answers. Both final gates were clean on round 1, and QA tested all 13 ACs.
+  - **Shape:** 5 agents (designer, one engineer, reviewer, QA, writer), all agent-team teammates. The lead started at 45.6k tokens.
+  - **It ran the fallback:** Opus 5.5 gets no `TaskCreate`/`TaskList` unless `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` is set (Claude Code gives the task tools by default only up to Opus 4.7 and Sonnet 4.6). So the shared task list, the `TaskCompleted` gate and the gates' direct messaging are still untested. The lead ran each task's checks itself on a clean checkout.
+  - **Confirmed:** the cache setting was written, the plan check worked for the two risky tasks, and the `team/eng` branch and worktree were cleaned up.
+  - **Fixed afterwards:**
+    - `check.sh` and setup now cover the task tools variable.
+    - The lead names the mode, and what's missing in fallback, before its first question.
+    - The gates now treat the spec's wording as winning over the design doc or a narrower reading. Both gates had passed the save-error rule as a note again, because the design doc had narrowed it to each control.
 
 ## Why this order
 

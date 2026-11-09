@@ -3,7 +3,7 @@
 The default flow: one or two full-stack engineers build the tasks in order, the plugin's task gate runs the project's checks on every completed task, and code-reviewer and qa-tester run once on the whole branch as the final gate. You set it up, answer questions and step in when it stalls; the teammates route work between themselves. Sections named below are in `SKILL.md`.
 
 ## Teams or fallback
-Team mode runs on Claude Code's agent teams when you have the task tools (`TaskCreate`, `TaskList`, `TaskUpdate`; load them with ToolSearch if they are deferred) and `echo $CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` prints `1`. Otherwise run the **fallback** described at each step: the same flow with plain subagents, where you do the task list's job. Say once in your first message which one this run uses.
+Team mode runs on Claude Code's agent teams when you have the task tools (`TaskCreate`, `TaskList`, `TaskUpdate`; load them with ToolSearch if they are deferred) and `echo $CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` prints `1`. Otherwise run the **fallback** described at each step: the same flow with plain subagents, where you do the task list's job. State which one this run uses before anything else, even before your first question, and when it's the fallback, name what's missing: newer models such as Opus 5.5 only get the task tools with `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, and `/ai-workflow:setup` sets both.
 
 ## 1. Prepare
 1. Section 1 steps 1-4 as written: the spec check, reproduction for BUG/TICKET specs (1a), the PR and setup checks, and the feature branch (1d). Skip the codebase graph (1c) and the task tracker: team mode builds no graph at the start and files no intent files or tickets.

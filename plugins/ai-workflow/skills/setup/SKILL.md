@@ -11,7 +11,7 @@ Check this machine for what ai-workflow needs, then offer to fix what's missing.
 3. Otherwise ask with the question tool, `multiSelect`, which items to set up. Use one question per group, and only for groups with a missing item: at most 4 questions with at most 4 options each. Label each option with the item, and put what's lost without it in its description. Pre-recommend every `MISSING` item.
    - **Command-line tools:** git, gh, jq, curl
    - **Browser testing:** pinchtab CLI, pinchtab skill, Chrome
-   - **Agent teams** (only if `OPTIONAL agent-teams`)
+   - **Agent teams** (only if `OPTIONAL agent-teams` or `OPTIONAL task-tools`): both settings, set together
    - **Extras:** graphify, cmux
 4. For each item the user ticked, use the matching fix below, one at a time, and show the command before running it. On a failure, say what failed and go on to the next item.
 
@@ -22,7 +22,7 @@ Check this machine for what ai-workflow needs, then offer to fix what's missing.
 | pinchtab CLI | `brew install pinchtab/tap/pinchtab`. Without Homebrew: `bun add -g pinchtab` when Bun is installed (check that `~/.bun/bin` is on the PATH), otherwise `npm install -g pinchtab`. |
 | pinchtab skill | `bunx skills add pinchtab/pinchtab` when Bun is installed, otherwise `npx skills add pinchtab/pinchtab`. It installs the skill from pinchtab's own repo, so ask before running it. |
 | Chrome | Tell the user to install Google Chrome or Chromium. |
-| Agent teams | Ask "This project only" (Recommended) / "Every project". Teams are experimental, and in every session they let Claude turn ordinary helper agents into teammates, which costs more tokens. Then add `"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"` under `env` in `.claude/settings.local.json` (this project) or `~/.claude/settings.json` (every project). Keep everything already in the file. Claude Code picks the change up when the file is saved. |
+| Agent teams and task tools | Ask "This project only" (Recommended) / "Every project". Teams are experimental, and in every session they let Claude turn ordinary helper agents into teammates, which costs more tokens. Then add `"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"` and `"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1"` under `env` in `.claude/settings.local.json` (this project) or `~/.claude/settings.json` (every project). Keep everything already in the file. Without the second, newer models such as Opus 5.5 get no `TaskCreate`, and team mode can't use the shared task list. It takes effect from the next session. |
 | graphify | `uv tool install graphifyy` (or `pipx install graphifyy` without uv), then `graphify install` to add its skill. |
 | cmux | Point to https://cmux.dev. It's a terminal app, so the user installs it. |
 
