@@ -11,6 +11,9 @@ const BAND = {
 } as const
 
 const MIN = 60_000
+// Tests that run the 1 s ticker through many simulated minutes take a few seconds of real time,
+// more on a slow CI runner, so they get more than the kit's 5 s default.
+const SLOW = { timeoutMs: 30_000 }
 
 // The engine beneath the plugin: the clock, the cross-session store, the command list, the toasts and an empty band.
 // Extras go in one named options object, never positional: { startAt, audioFails, stored, isStoreBroken, corrupt, resetFails }.
@@ -199,7 +202,7 @@ test('AC4, AC5, AC8: a pomodoro counts and starts a break, a break ends in the w
   await ui.unmount()
 })
 
-test('AC7: Stop during a pomodoro keeps the count, hides the band and resets the cycle', async ($, on) => {
+test('AC7: Stop during a pomodoro keeps the count, hides the band and resets the cycle', SLOW, async ($, on) => {
   const { clock } = await boot($, on)
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -219,7 +222,7 @@ test('AC7: Stop during a pomodoro keeps the count, hides the band and resets the
   await ui.unmount()
 })
 
-test('AC8: a break offers Skip and Stop; Skip goes to waiting with no alert, Stop hides the band', async ($, on) => {
+test('AC8: a break offers Skip and Stop; Skip goes to waiting with no alert, Stop hides the band', SLOW, async ($, on) => {
   const { clock, toasts } = await boot($, on)
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -241,7 +244,7 @@ test('AC8: a break offers Skip and Stop; Skip goes to waiting with no alert, Sto
   await ui.unmount()
 })
 
-test('AC9: /pomodoro during a pomodoro or break only toasts the status; waiting starts the next pomodoro', async ($, on) => {
+test('AC9: /pomodoro during a pomodoro or break only toasts the status; waiting starts the next pomodoro', SLOW, async ($, on) => {
   const { clock, toasts } = await boot($, on)
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -262,7 +265,7 @@ test('AC9: /pomodoro during a pomodoro or break only toasts the status; waiting 
   await ui.unmount()
 })
 
-test('AC12: closing the session ends its timer; the running pomodoro is not counted', async ($, on) => {
+test('AC12: closing the session ends its timer; the running pomodoro is not counted', SLOW, async ($, on) => {
   const { clock } = await boot($, on)
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -286,7 +289,7 @@ test('AC11: the band shows the count other sessions and earlier runs stored for 
   await ui.unmount()
 })
 
-test('AC4, AC11: a finished pomodoro adds 1 to the stored count, which another session may have raised meanwhile', async ($, on) => {
+test('AC4, AC11: a finished pomodoro adds 1 to the stored count, which another session may have raised meanwhile', SLOW, async ($, on) => {
   const { clock, store } = await boot($, on, { startAt: NOV1, stored: { [DAY]: { date: 'Sun Nov 01 2026', count: 3 } } })
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -305,7 +308,7 @@ test('AC7, AC12: a stopped or abandoned pomodoro leaves the stored count alone',
   expect(store.get(DAY)).toEqual({ date: 'Sun Nov 01 2026', count: 2 })
 })
 
-test('AC11: the count resets to 0 at local midnight', async ($, on) => {
+test('AC11: the count resets to 0 at local midnight', SLOW, async ($, on) => {
   const { clock, store } = await boot($, on, { startAt: Date.parse('2026-11-01T23:50:00'), stored: { [DAY]: { date: 'Sun Nov 01 2026', count: 7 } } })
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -316,7 +319,7 @@ test('AC11: the count resets to 0 at local midnight', async ($, on) => {
   await ui.unmount()
 })
 
-test('AC11: a waiting band left open across midnight drops to 0', async ($, on) => {
+test('AC11: a waiting band left open across midnight drops to 0', SLOW, async ($, on) => {
   const { clock } = await boot($, on, { startAt: Date.parse('2026-11-01T23:20:00'), stored: { [DAY]: { date: 'Sun Nov 01 2026', count: 5 } } })
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -335,7 +338,7 @@ test('AC11: a yesterday count in the store reads as 0', async ($, on) => {
   await ui.unmount()
 })
 
-test('AC11: a stored count that is garbage reads as 0, the finished pomodoro overwrites it with 1, and the timer keeps working', async ($, on) => {
+test('AC11: a stored count that is garbage reads as 0, the finished pomodoro overwrites it with 1, and the timer keeps working', SLOW, async ($, on) => {
   const { clock, toasts, store } = await boot($, on, { startAt: NOV1, stored: { [DAY]: 'oops' } })
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -346,7 +349,7 @@ test('AC11: a stored count that is garbage reads as 0, the finished pomodoro ove
   await ui.unmount()
 })
 
-test('AC11: a store that cannot be read or written counts from 0 and the timer keeps working', async ($, on) => {
+test('AC11: a store that cannot be read or written counts from 0 and the timer keeps working', SLOW, async ($, on) => {
   const { clock, toasts } = await boot($, on, { startAt: NOV1, isStoreBroken: true })
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -360,7 +363,7 @@ test('AC11: a store that cannot be read or written counts from 0 and the timer k
 const FILE = '/home/me/.claude/plugins/store/pomodoro_inline-1a.json'
 const CORRUPT_TOAST = "Today's Pomodoro count file is corrupt and can't be saved — use Reset count in the band to start it fresh."
 
-test('AC15: a corrupt count file toasts once per session, however many times it fails', async ($, on) => {
+test('AC15: a corrupt count file toasts once per session, however many times it fails', SLOW, async ($, on) => {
   const { clock, toasts } = await boot($, on, { startAt: NOV1, corrupt: { file: FILE } })
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -401,7 +404,7 @@ test('AC15: Reset count is offered while the file is corrupt, after the other bu
   await ui.unmount()
 })
 
-test('AC15: Reset count rewrites only the corrupt file, the band shows ×0 and later pomodoros count again', async ($, on) => {
+test('AC15: Reset count rewrites only the corrupt file, the band shows ×0 and later pomodoros count again', SLOW, async ($, on) => {
   const { clock, store, writes, toasts } = await boot($, on, { startAt: NOV1, corrupt: { file: FILE } })
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -458,7 +461,7 @@ test('AC15: an error naming this plugin\'s file name in another folder writes no
 // keeping its end and the lengths being read only when a phase starts. NOT covered: `openPomodoro`
 // picking the ticker back up after a real reload (the kit cannot restart the module, so the module's
 // ticker survives this second `session.start`).
-test('AC13: a reload mid-phase carries the countdown on from its stored end and still transitions', async ($, on) => {
+test('AC13: a reload mid-phase carries the countdown on from its stored end and still transitions', SLOW, async ($, on) => {
   const { clock, toasts } = await boot($, on)
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -487,7 +490,7 @@ test('AC13: settings set the lengths and the cycle', { options: { pomodoroWorkMi
   await ui.unmount()
 })
 
-test('AC13: a missing, fractional or out-of-range setting falls back to its default', { options: { pomodoroWorkMinutes: 0, pomodoroShortBreakMinutes: 2.5, pomodoroLongBreakMinutes: 121, pomodoroPerCycle: 9 } }, async ($, on) => {
+test('AC13: a missing, fractional or out-of-range setting falls back to its default', { ...SLOW, options: { pomodoroWorkMinutes: 0, pomodoroShortBreakMinutes: 2.5, pomodoroLongBreakMinutes: 121, pomodoroPerCycle: 9 } }, async ($, on) => {
   const { clock } = await boot($, on)
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -532,7 +535,7 @@ test('AC4, AC5: the ring plays with the toast at the end of a pomodoro and of a 
   expect(rings).toEqual(['assets/sounds/pomodoro-ring.wav', 'assets/sounds/pomodoro-ring.wav'])
 })
 
-test('AC8: Skip, Pause, Resume and Stop are silent', async ($, on) => {
+test('AC8: Skip, Pause, Resume and Stop are silent', SLOW, async ($, on) => {
   const { clock, rings } = await boot($, on)
   const ui = await $.ui.mount(BAND)
   await run($)
@@ -546,7 +549,7 @@ test('AC8: Skip, Pause, Resume and Stop are silent', async ($, on) => {
   await ui.unmount()
 })
 
-test('AC4, AC5: when the ring cannot play the toast still shows and the timer goes on', async ($, on) => {
+test('AC4, AC5: when the ring cannot play the toast still shows and the timer goes on', SLOW, async ($, on) => {
   const { clock, toasts, rings } = await boot($, on, { audioFails: true })
   const ui = await $.ui.mount(BAND)
   await run($)
