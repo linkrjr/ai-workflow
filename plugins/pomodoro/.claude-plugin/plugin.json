@@ -1,0 +1,51 @@
+{
+  "name": "pomodoro",
+  "version": "1.0.0",
+  "description": "A /pomodoro timer above the prompt: work and break phases, a ring at each end, and today's count shared across sessions.",
+  "author": {
+    "name": "Ronaldo Gomes"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/linkrjr/ai-workflow",
+  "repository": "https://github.com/linkrjr/ai-workflow.git",
+  "keywords": ["pomodoro", "timer", "focus"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "pomodoroOn": {
+      "type": "boolean",
+      "title": "Pomodoro · On",
+      "description": "Offer the /pomodoro timer. Off: no /pomodoro command and no Pomodoro band.",
+      "default": true
+    },
+    "pomodoroRing": {
+      "type": "boolean",
+      "title": "Pomodoro · Ring",
+      "description": "Play a ring when a pomodoro or a break ends. Off: the toast only. Applies from the next phase end.",
+      "default": true
+    },
+    "pomodoroWorkMinutes": {
+      "type": "number",
+      "title": "Pomodoro · Work minutes",
+      "description": "Length of a pomodoro, in whole minutes (1-120). Applies from the next phase that starts.",
+      "default": 25
+    },
+    "pomodoroShortBreakMinutes": {
+      "type": "number",
+      "title": "Pomodoro · Short break minutes",
+      "description": "Length of a short break, in whole minutes (1-120). Applies from the next phase that starts.",
+      "default": 5
+    },
+    "pomodoroLongBreakMinutes": {
+      "type": "number",
+      "title": "Pomodoro · Long break minutes",
+      "description": "Length of the long break after a full cycle, in whole minutes (1-120). Applies from the next phase that starts.",
+      "default": 15
+    },
+    "pomodoroPerCycle": {
+      "type": "number",
+      "title": "Pomodoro · Pomodoros per cycle",
+      "description": "Pomodoros before a long break (2-8). Applies from the next phase that starts.",
+      "default": 4
+    }
+  }
+}

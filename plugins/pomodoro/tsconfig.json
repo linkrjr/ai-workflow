@@ -1,0 +1,1 @@
+{ "extends": "../../engine-types/tsconfig.json", "include": ["hooks", "types", "tests"] }

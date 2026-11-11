@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/ai-workflow
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Script tests
+        run: |
+          bash skills/jev/scripts/test_jev.sh
+          bash skills/linear/scripts/test_linear.sh
+          bash skills/orchestrator/scripts/test_cleanup.sh
+          bash skills/orchestrator/scripts/test_status.sh
+          bash skills/setup/scripts/test_check.sh
+      - name: Prompts use no working-directory script paths
+        run: |
+          # grep exits 1 on no match; anything else (a match, or a path that no longer exists) fails the step.
+          out=$(grep -rnE '(^|[^/}])scripts/(jev|linear|test_)' skills agents) && {
+            echo "$out"; echo "Use \${CLAUDE_PLUGIN_ROOT} or \${CLAUDE_SKILL_DIR}; agents read the path from the run context."; exit 1
+          } || [ $? -eq 1 ]
+      - name: Prompts use the per-spec run state
+        run: |
+          out=$(grep -rnE 'tmp/team/(handoff|design|review|qa|jev|ticket|feature)' skills agents ../../README.md) && {
+            echo "$out"; echo "Run state lives in tmp/team/<spec slug>/; see skills/orchestrator/SKILL.md."; exit 1
+          } || [ $? -eq 1 ]
+      - name: Type check
+        run: |
+          bunx --package typescript@5.8.3 tsc --noEmit -p .
+          bunx --package typescript@5.8.3 tsc --noEmit -p ../pomodoro
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Validate the marketplace and plugins
+        run: |
+          claude plugin validate ../..
+          claude plugin validate .
+          claude plugin validate ../pomodoro
+      - name: Mod tests
+        run: |
+          claude plugin test .
+          claude plugin test ../pomodoro

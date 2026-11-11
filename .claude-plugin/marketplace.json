@@ -7,8 +7,13 @@
   "plugins": [
     {
       "name": "ai-workflow",
-      "source": "./",
+      "source": "./plugins/ai-workflow",
       "description": "AI engineering pipeline: /workshop (spec), /orchestrator (design→code→review→docs), /audit (audit), /openapi (OpenAPI spec). Includes ticket-reviewer, designer, backend/frontend engineers, code-reviewer, writer agents, plus optional Jev advisory signals."
+    },
+    {
+      "name": "pomodoro",
+      "source": "./plugins/pomodoro",
+      "description": "A /pomodoro timer above the prompt: work and break phases, a ring at each end, and today's count shared across sessions."
     }
   ]
 }

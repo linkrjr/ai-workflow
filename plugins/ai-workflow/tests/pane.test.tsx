@@ -1,0 +1,654 @@
+import { expect, mock, test } from 'claude-code/testing'
+
+const PANE = {
+  plugin: 'ai-workflow',
+  component: 'Pane',
+  requestId: 'agent-teams',
+  props: {
+    title: 'Agent teams',
+    isFocused: false,
+    bodyColumns: 120,
+    placement: 'dock',
+    scroll: { offset: 0, bodyRows: 30 },
+    view: {},
+  },
+} as const
+
+test('the pane shows the leader and each subagent it started', async ($, on) => {
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  let now = Date.parse('2026-10-24T14:43:26')
+  on('clock.now', () => ({ value: (now += 1000) }))
+  on('session.model', () => ({ value: 'claude-opus-5-5[1m]' }))
+  on('tool.call', () => ({ result: {} }))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  on('agent.spawn', () => ({ model: 'claude-sonnet-5-5', agentId: 'a1' }))
+  on('turn.step', async function* (_, e) {
+    return {
+      turnId: e.turnId,
+      index: e.index,
+      answer: '',
+      toolUses: [],
+      stopReason: 'end_turn' as const,
+      usage: {
+        model: 'claude-sonnet-5-5',
+        input_tokens: 1000,
+        output_tokens: 1000,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
+    }
+  })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const mount = (surface: 'terminal' | 'desktop') => $.ui.mount({ ...PANE, surface })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await mount(surface)
+    expect((await ui.find({ type: 'Text', text: /^Session not started$/ }))?.text).toBe('Session not started')
+    await ui.unmount()
+  }
+
+  await $.agent.spawn({
+    tool_use_id: 't1',
+    prompt: 'go',
+    description: 'fix bug',
+    name: 'backend',
+    subagentType: 'ai-workflow:backend-engineer',
+    provider: { plugin: 'engine', tier: 'core' },
+    parentModel: 'claude-opus-5-5',
+    background: true,
+    fork: false,
+  })
+  for await (const _ of $.turn.step({
+    turnId: 'x',
+    index: 0,
+    model: 'claude-sonnet-5-5',
+    effort: 'high',
+    messageCount: 1,
+    agentId: 'a1',
+  }));
+
+  // @ts-ignore TS2589 (types recurse too deep) only when a session rewrote the MCP types with every connected server
+  await $.tool.call({ tool: 'Bash', command: 'ls', agentId: 'a1' })
+
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await mount(surface)
+    const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
+    expect(await text(/AGENT TEAMS/)).toBe('AGENT TEAMS - OPUS 5.5 IDLE')
+    expect(await text(/^Backend/)).toMatch(/^Backend - Sonnet 5\.5 - \d+s - Running$/)
+    expect(await text(/^Now:/)).toMatch(/^Now: Bash → ls · \d+s ago$/)
+    expect(await text(/^Tasks:/)).toBeUndefined() // no task list: no count
+    expect(await text(/^Tokens: 2/)).toBe('Tokens: 2.0k (1.0k in / 1.0k out)')
+    // 1000 in at $2/M + 1000 out at $10/M
+    expect(await text(/^Cost: \$0\.0120/)).toBe('Cost: $0.0120 (1.0k×$2/M + 1.0k×$10/M)')
+    expect(await text(/^Effort: H/)).toBe('Effort: High')
+    expect(await text(/^Leader/)).toBe('Leader - Opus 5.5 - — - Idle')
+    expect(await text(/^Subagents/)).toBe('Subagents: 1 running · 1 started')
+    // The agent's icon is a terminal Image; other surfaces have none.
+    const icon = await ui.find({ type: 'Image', key: 'agent-a1' })
+    expect(Boolean(icon)).toBe(surface === 'terminal')
+    await ui.unmount()
+  }
+
+  // A finished agent's box is dropped; the log keeps what it did.
+  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 'x', agentId: 'a1', reason: 'answer' })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await mount(surface)
+    const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
+    expect(await text(/^Backend/)).toBeUndefined()
+    expect(await text(/^No running subagents/)).toBe('No running subagents.')
+    expect(await text(/^fix bug$/)).toBe('fix bug')
+    expect(await text(/^spawned/)).toBe('spawned · backend')
+    expect(await text(/^Bash/)).toBe('Bash → ls')
+    expect(await text(/^done/)).toMatch(/^done · \d+s$/)
+    expect(await text(/^Session not started/)).toBeUndefined()
+    await ui.unmount()
+  }
+})
+
+test("the leader box follows the main session's own turns", async ($, on) => {
+  let now = Date.parse('2026-10-24T14:43:26')
+  on('clock.now', () => ({ value: (now += 1000) }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  on('turn.step', async function* (_, e) {
+    return {
+      turnId: e.turnId,
+      index: e.index,
+      answer: '',
+      toolUses: [],
+      stopReason: 'end_turn' as const,
+      usage: {
+        model: 'claude-opus-5-5',
+        input_tokens: 1000,
+        output_tokens: 1000,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
+    }
+  })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'build it', turnId: 'm1' })
+  for await (const _ of $.turn.step({ turnId: 'm1', index: 0, model: 'claude-opus-5-5', effort: 'xhigh', messageCount: 1 }));
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
+  expect(await text(/^Leader/)).toBe('Leader - Opus 5.5 - 1s - Working')
+  expect(await text(/^AGENT TEAMS/)).toBe('AGENT TEAMS - OPUS 5.5 WORKING')
+  expect(await text(/^Tokens/)).toBe('Tokens: 2.0k (1.0k in / 1.0k out)')
+  // 1000 in at $4/M + 1000 out at $20/M
+  expect(await text(/^Cost/)).toBe('Cost: $0.0240 (1.0k×$4/M + 1.0k×$20/M)')
+  expect(await text(/^Effort/)).toBe('Effort: Xhigh')
+  expect(await text(/^Subagents/)).toBe('Subagents: 0 running · 0 started')
+  expect(await text(/^build it$/)).toBe('build it')
+  await ui.unmount()
+
+  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 'm1', reason: 'answer' })
+  // The task ended with the turn (no subagent running): its time stops there.
+  for (let i = 0; i < 2; i++) {
+    const after = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await after.find({ type: 'Text', text: /^Leader/ }))?.text).toBe('Leader - Opus 5.5 - 2s - Idle')
+    await after.unmount()
+  }
+})
+
+test('a permission ask is held while its call waits, and dropped once it settles', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.check', () => ({ decision: 'ask' as const, reason: 'rm is not allowed by default' }))
+  // Every write of the plugin's asks, in order; the kit's own store sits beneath.
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => (writes.push(e.value), next(e)))
+  let held: unknown
+  on('classic.PermissionRequest', () => {
+    // The person is being asked now: the last write is what the pane shows.
+    held = writes.at(-1)
+    return { decision: { behavior: 'deny' as const } }
+  })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'Bash', command: 'rm -rf build API_KEY=abc123' })
+
+  expect(held).toEqual([
+    {
+      id: expect.any(String),
+      who: 'Leader',
+      tool: 'Bash',
+      label: 'Command',
+      detail: 'rm -rf build API_KEY=•••',
+      reason: 'rm is not allowed by default',
+      isAnswerable: false,
+    },
+  ])
+  expect(writes.at(-1)).toEqual([])
+})
+
+test('the permission box shows each waiting ask', async ($, on) => {
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  const waiting = [
+    { id: 't1', who: 'Backend', tool: 'Bash', label: 'Command', detail: 'rm -rf build', reason: 'rm is not allowed', isAnswerable: false },
+  ]
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('state.get', { plugin: 'ai-workflow', key: 'asks' }, () => ({ value: { value: waiting, version: 1 } }))
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
+  expect(await text(/^⚠/)).toBe('⚠ Permission · Backend wants to use Bash')
+  expect(await text(/^rm -rf/)).toBe('rm -rf build')
+  expect(await text(/^rm is not/)).toBe('rm is not allowed')
+  expect(await text(/waiting on your answer/)).toBe('Claude is waiting on your answer in the permission prompt')
+  await ui.unmount()
+})
+
+test('Proceed in the pane answers an ask a person would', async ($, on) => {
+  let now = Date.parse('2026-10-25T14:20:00')
+  on('clock.now', () => ({ value: now }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.check', () => ({ decision: 'ask' as const, reason: 'rm is not allowed by default' }))
+  // The wait's sleep: never ends by itself, only when the pane's answer kills it.
+  on('process.spawn', async function* (_, e, next) {
+    await new Promise<void>(resolve => next.signal.addEventListener('abort', () => resolve()))
+    return { value: { code: null, signal: 'SIGTERM' } }
+  })
+
+  let stored!: () => void
+  const isStored = new Promise<void>(resolve => (stored = resolve))
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => {
+    if (e.value.some(a => a.isAnswerable)) stored()
+    return next(e)
+  })
+
+  const verdict = $.tool.check({
+    tool: 'Bash',
+    input: { command: 'rm -rf build' },
+    tool_use_id: 't1',
+    approver: 'person',
+  })
+  await isStored
+  now += 5000
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /waiting on your answer/ }))?.text).toBe('  Claude is waiting on your answer')
+  await ui.press({ key: 'proceed-t1' })
+  await ui.unmount()
+
+  expect((await verdict).decision).toBe('allow')
+})
+
+test('Cancel above the prompt refuses an ask a person would answer', async ($, on) => {
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  let now = Date.parse('2026-10-25T14:20:00')
+  on('clock.now', () => ({ value: now }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  // The engine's own band beneath: nothing to show.
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box key="engine-band" />
+  })
+  on('tool.check', () => ({ decision: 'ask' as const }))
+  on('process.spawn', async function* (_, e, next) {
+    await new Promise<void>(resolve => next.signal.addEventListener('abort', () => resolve()))
+    return { value: { code: null, signal: 'SIGTERM' } }
+  })
+
+  // The band draws once the plugin has stored the ask as answerable.
+  let stored!: () => void
+  const isStored = new Promise<void>(resolve => (stored = resolve))
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => {
+    if (e.value.some(a => a.isAnswerable)) stored()
+    return next(e)
+  })
+
+  const verdict = $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't2', approver: 'person' })
+  await isStored
+  const band = await $.ui.mount({
+    plugin: 'ai-workflow',
+    component: 'AbovePrompt',
+    surface: 'terminal',
+    props: { hasSurvey: false, isWorking: true, maxRows: 3, bodyColumns: 100, scroll: { offset: 0, bodyRows: 3 }, view: {} },
+  })
+  expect((await band.find({ type: 'Text', text: /^⚠/ }))?.text).toBe('⚠ Leader wants Bash: git push  ')
+  // The rows beneath (another plugin's, such as the Pomodoro band) still draw, below the ask.
+  expect(await band.find({ key: 'engine-band' })).toBeDefined()
+  now += 5000
+  await band.press({ key: 'band-cancel-t2' })
+  await band.unmount()
+
+  const r = await verdict
+  expect(r.decision).toBe('deny')
+})
+
+test('the session log box collapses and expands', async ($, on) => {
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
+  expect(await text(/^Session not started$/)).toBe('Session not started')
+
+  await ui.press({ key: 'log-toggle' })
+  expect(await text(/^Session not started$/)).toBeUndefined()
+
+  await ui.press({ key: 'log-toggle' })
+  expect(await text(/^Session not started$/)).toBe('Session not started')
+  await ui.unmount()
+})
+
+test('Session Log On off: the pane draws no session log', { options: { logOn: false } }, async ($, on) => {
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ key: 'log-toggle' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^Session not started$/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+const BAND = {
+  plugin: 'ai-workflow',
+  component: 'AbovePrompt',
+  surface: 'terminal',
+  props: { hasSurvey: false, isWorking: false, maxRows: 3, bodyColumns: 100, scroll: { offset: 0, bodyRows: 3 }, view: {} },
+} as const
+
+test('Always On off: the pane waits for the button above the prompt', { options: { alwaysOn: false } }, async ($, on) => {
+  const opened: string[] = []
+  on('ui.open', (_, e) => {
+    opened.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('ui.panes', () => ({ value: [] }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  // The engine's own band beneath: nothing to show.
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box key="engine-band" />
+  })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(opened).toEqual([])
+
+  const band = await $.ui.mount(BAND)
+  await band.press({ key: 'open-pane' })
+  expect(opened).toEqual(['agent-teams'])
+  expect(await band.find({ key: 'open-pane' })).toBeUndefined()
+  await band.unmount()
+})
+
+test('Always On: the pane opens with the session and the band stays empty', async ($, on) => {
+  const opened: string[] = []
+  on('ui.open', (_, e) => {
+    opened.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  // The engine's own band beneath: nothing to show.
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box key="engine-band" />
+  })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(opened).toEqual(['agent-teams'])
+  const band = await $.ui.mount(BAND)
+  expect(await band.find({ key: 'open-pane' })).toBeUndefined()
+  await band.unmount()
+})
+
+test('Icons On off: the pane draws no icons', { options: { iconsOn: false } }, async ($, on) => {
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Image' })).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /AGENT TEAMS/ }))?.text).toBe('AGENT TEAMS - OPUS 5.5 IDLE')
+  await ui.unmount()
+})
+
+test('in auto mode an ask is left to the classifier: no permission box', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.check', () => ({ decision: 'ask' as const }))
+  on('classic.UserPromptSubmit', () => ({}))
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => (writes.push(e.value), next(e)))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'auto' })
+  const r = await $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't3', approver: 'person' })
+
+  expect(r.decision).toBe('ask')
+  expect(writes).toEqual([])
+})
+
+test('the usage tool reports the plan limits', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const rateLimits = [{ kind: 'five_hour', percentUsed: 98.2, resetsAt: '2026-11-03T18:00:00Z' }]
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 0 }, rateLimits } }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const r = await $.tool.call({ tool: 'mcp__ai-workflow__usage' })
+  expect(JSON.parse((r.result as { text: string }[])[0]?.text ?? "")).toEqual(rateLimits)
+})
+
+test('the compact tool compacts once the main turn ends', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  const clock = mock.clock(on, { now: 0 })
+  const compacted: unknown[] = []
+  on('session.compact', (_, e) => (compacted.push(e.instructions), { skip: 'test' }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  await $.tool.call({ tool: 'mcp__ai-workflow__compact', instructions: 'keep the spec path' })
+  expect(compacted).toEqual([])
+  await $.turn.complete({ answer: 'paused', durationMs: 1, isAborted: false, turnId: 'x', reason: 'answer' })
+  await clock.advance(1000)
+  expect(compacted).toEqual(['keep the spec path'])
+})
+
+// The tests' tsconfig has no DOM or Node lib to declare it.
+declare const setTimeout: (run: (value: unknown) => void, ms: number) => unknown
+const settle = () => new Promise(resolve => setTimeout(resolve, 50))
+
+// Asks a person answers, each held until the pane settles it or the plugin hands it to the prompt.
+function holdAsks($: any, on: any) {
+  const clock = { now: Date.parse('2026-10-25T14:20:00') }
+  on('clock.now', () => ({ value: clock.now }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.check', () => ({ decision: 'ask' as const }))
+  on('process.spawn', async function* (_: unknown, e: unknown, next: any) {
+    await new Promise<void>(resolve => next.signal.addEventListener('abort', () => resolve()))
+    return { value: { code: null, signal: 'SIGTERM' } }
+  })
+  const writes: any[][] = []
+  const waiters: (() => void)[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_: unknown, e: any, next: any) => {
+    writes.push(e.value)
+    waiters.splice(0).forEach(run => run())
+    return next(e)
+  })
+  const ask = (id: string, tool: string, input: Record<string, unknown>) => {
+    const isStored = new Promise<void>(resolve => waiters.push(resolve))
+    const verdict = $.tool.check({ tool, input, tool_use_id: id, approver: 'person' })
+    return { verdict, isStored }
+  }
+  return { clock, ask, writes }
+}
+
+const pending = (verdict: Promise<unknown>) => Promise.race([verdict, settle().then(() => 'pending')])
+
+test('a press right after an ask comes up is ignored; a later one answers it', async ($, on) => {
+  const { clock, ask } = holdAsks($, on)
+  const { verdict, isStored } = ask('t1', 'Bash', { command: 'rm -rf build' })
+  await isStored
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'proceed-t1' })
+  expect(await pending(verdict)).toBe('pending')
+  clock.now += 5000
+  await ui.press({ key: 'proceed-t1' })
+  expect((await verdict).decision).toBe('allow')
+  await ui.unmount()
+})
+
+test('a double press answers one ask and leaves the next one waiting', async ($, on) => {
+  const { clock, ask } = holdAsks($, on)
+  const first = ask('t1', 'Bash', { command: 'ls' })
+  await first.isStored
+  const second = ask('t2', 'Bash', { command: 'rm -rf build' })
+  await second.isStored
+  clock.now += 5000
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'proceed-t1' })
+  expect((await first.verdict).decision).toBe('allow')
+  await settle()
+  await ui.press({ key: 'proceed-t2' })
+  expect(await pending(second.verdict)).toBe('pending')
+  clock.now += 5000
+  await ui.press({ key: 'cancel-t2' })
+  expect((await second.verdict).decision).toBe('deny')
+  await ui.unmount()
+})
+
+test('an Edit ask shows its change, and other input shows whole', async ($, on) => {
+  const { clock, ask, writes } = holdAsks($, on)
+  const edit = ask('t1', 'Edit', { file_path: '/a/b.ts', old_string: 'one', new_string: 'two\nthree' })
+  await edit.isStored
+  const long = 'x'.repeat(400)
+  const mcp = ask('t2', 'mcp__x__y', { value: long })
+  await mcp.isStored
+  const [e, m] = writes.at(-1)!
+  expect([e.label, e.detail, e.isAnswerable]).toEqual(['Change', '/a/b.ts\n- one\n+ two\n+ three', true])
+  expect([m.label, m.detail, m.isAnswerable]).toEqual(['Input', JSON.stringify({ value: long }), true])
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^\/a\/b\.ts/ }))?.text).toBe('/a/b.ts\n- one\n+ two\n+ three')
+  clock.now += 5000
+  await ui.press({ key: 'cancel-t1' })
+  await edit.verdict
+  await settle()
+  clock.now += 5000
+  await ui.press({ key: 'cancel-t2' })
+  await mcp.verdict
+  await ui.unmount()
+})
+
+test('an ask too long to read whole goes to the engine prompt', async ($, on) => {
+  const { ask, writes } = holdAsks($, on)
+  const { verdict } = ask('t1', 'Bash', { command: `echo ${'x'.repeat(2000)}` })
+  expect((await verdict).decision).toBe('ask')
+  expect(writes[0]![0].isAnswerable).toBe(false)
+})
+
+test('the band offers no answer when the ask would not fit on its row', async ($, on) => {
+  const { clock, ask } = holdAsks($, on)
+  // The engine's own band beneath: nothing to show.
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box key="engine-band" />
+  })
+  const { verdict, isStored } = ask('t1', 'Bash', { command: 'git status\nrm -rf build' })
+  await isStored
+  const band = await $.ui.mount({
+    plugin: 'ai-workflow',
+    component: 'AbovePrompt',
+    surface: 'terminal',
+    props: { hasSurvey: false, isWorking: true, maxRows: 3, bodyColumns: 100, scroll: { offset: 0, bodyRows: 3 }, view: {} },
+  })
+  expect((await band.find({ type: 'Text', text: /^⚠/ }))?.text).toBe('⚠ Leader wants Bash: read it in the agent teams pane')
+  expect(await band.find({ type: 'Button' })).toBeUndefined()
+  await band.unmount()
+  clock.now += 5000
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'cancel-t1' })
+  expect((await verdict).decision).toBe('deny')
+  await ui.unmount()
+})
+
+test('a missing tool shows a setup notice once per list of missing items', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const store = new Map<string, unknown>()
+  on('store.get', (_: any, e: any) => ({ value: store.get(e.key) }))
+  on('store.set', (_: any, e: any) => (store.set(e.key, e.value), { value: undefined }))
+  let report = 'OK git: git\nMISSING gh: GitHub CLI (gh) — engineers can\'t open PRs\nSETUP: 1 MISSING\n'
+  const runs: string[][] = []
+  on('process.run', (_: any, e: any) => (runs.push(e.argv), { value: { exitCode: report.includes('READY') ? 0 : 1, stdout: report, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  const toasts: string[] = []
+  on('ui.toast', (_: any, e: any) => (toasts.push(e.text), { value: undefined }))
+  const settle = () => new Promise(resolve => setTimeout(resolve, 20))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await settle()
+  expect(runs[0]?.[1]).toMatch(/skills\/setup\/scripts\/check\.sh$/)
+  expect(toasts).toEqual(['ai-workflow: 1 missing (gh) — run /ai-workflow:setup'])
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await settle()
+  expect(toasts.length).toBe(1) // the same list: quiet
+
+  report = 'OK gh: GitHub CLI (gh)\nSETUP: READY\n'
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await settle()
+  report = 'MISSING gh: GitHub CLI (gh) — engineers can\'t open PRs\nSETUP: 1 MISSING\n'
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await settle()
+  expect(toasts.length).toBe(2) // fixed, then missing again: told again
+})
+
+const ok = (stdout = '') => ({ value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
+const failed = (stdout: string) => ({ value: { exitCode: 1, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
+const buildTask = { task_id: 't1', task_subject: 'T1 Add todo', task_description: 'AC1\nChecks: bun run test && bun run typecheck\nWorktree: /repo.worktrees/eng-1' }
+
+test('a build task completes only while its checks pass, in its worktree', async ($, on) => {
+  let isPassing = false
+  const runs: { argv: readonly string[]; cwd?: string }[] = []
+  on('process.run', (_: any, e: any) => (runs.push({ argv: e.argv, cwd: e.init?.cwd }), isPassing ? ok() : failed('1 test failed: adds a todo')))
+  on('classic.TaskCompleted', () => ({}))
+
+  const r1 = await $.classic.TaskCompleted(buildTask)
+  expect(runs[0]).toEqual({ argv: ['bash', '-c', 'bun run test && bun run typecheck'], cwd: '/repo.worktrees/eng-1' })
+  expect(r1.block).toContain('exited 1')
+  expect(r1.block).toContain('1 test failed: adds a todo')
+  expect(r1.block).toContain('Failure 1 of 3')
+
+  isPassing = true
+  expect((await $.classic.TaskCompleted(buildTask)).block).toBeUndefined()
+})
+
+test('the third failed completion of a task tells the engineer to go to the lead', async ($, on) => {
+  on('process.run', () => failed('typecheck: 2 errors'))
+  on('classic.TaskCompleted', () => ({}))
+  await $.classic.TaskCompleted(buildTask)
+  await $.classic.TaskCompleted(buildTask)
+  const r = await $.classic.TaskCompleted(buildTask)
+  expect(r.block).toContain('failure 3 of 3')
+  expect(r.block).toContain('CHECKS STUCK: T1 Add todo')
+})
+
+test('a review task completes only once its verdict file exists, and other tasks pass through', async ($, on) => {
+  let isWritten = false
+  on('fs.exists', () => ({ value: isWritten }))
+  on('process.run', () => ok())
+  on('classic.TaskCompleted', () => ({}))
+  const review = { task_id: 'r1', task_subject: 'Final review', task_description: 'Verdict file: /repo/tmp/team/x/final-review-round-1.md' }
+  expect((await $.classic.TaskCompleted(review)).block).toBe('Write your verdict to /repo/tmp/team/x/final-review-round-1.md before completing "Final review".')
+  isWritten = true
+  expect((await $.classic.TaskCompleted(review)).block).toBeUndefined()
+  expect((await $.classic.TaskCompleted({ task_id: 'x', task_subject: 'Plain task' })).block).toBeUndefined()
+})
+
+test("the header names the run's mode and an engineer's box counts its tasks", async ($, on) => {
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('agent.spawn', () => ({ model: 'claude-sonnet-5-5', agentId: 'e1' }))
+  let state = 'Mode: team, fallback\nFeature PR: none\n'
+  on('fs.list', () => ({ value: [{ name: 'todo-app', kind: 'dir', size: 0, mtimeMs: 1, isLink: false }, { name: 'defaults.md', kind: 'file', size: 1, mtimeMs: 1, isLink: false }] }))
+  on('fs.exists', (_: any, e: any) => ({ value: e.path.endsWith('tmp/team/todo-app/state.md') }))
+  on('fs.stat', () => ({ value: { kind: 'file', size: 1, mtimeMs: 1, isLink: false } }))
+  on('fs.read', () => ({ value: state }))
+  let now = 0
+  on('clock.now', () => ({ value: now }))
+  on('tool.call', { tool: 'TaskCreate' }, () => ({ result: 'created' }))
+  on('tool.call', { tool: 'TaskUpdate' }, (_: any, e: any) => (e.taskId === '9' ? { isError: true, result: 'refused' } : { result: 'ok' }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  // The lead plans two tasks for eng and one for eng-2.
+  for (const who of ['eng', 'eng', 'eng-2']) {
+    await $.tool.call({ tool: 'TaskCreate', subject: 'T', description: `ACs: AC1\nEngineer: ${who}\nChecks: x` } as any)
+  }
+  await $.agent.spawn({ tool_use_id: 't1', prompt: 'go', description: 'build', name: 'eng', subagentType: 'ai-workflow:fullstack-engineer', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'claude-opus-5-5', background: true, fork: false })
+  // A completion the gate refused doesn't count; the accepted one does, once.
+  await $.tool.call({ tool: 'TaskUpdate', taskId: '9', status: 'completed', agentId: 'e1' } as any)
+  await $.tool.call({ tool: 'TaskUpdate', taskId: '1', status: 'completed', agentId: 'e1' } as any)
+  await $.tool.call({ tool: 'TaskUpdate', taskId: '1', status: 'completed', agentId: 'e1' } as any)
+
+  let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = async (re: RegExp) => (await ui.find({ type: 'Text', text: re }))?.text
+  expect(await text(/AGENT TEAMS/)).toBe('AGENT TEAMS - OPUS 5.5 FALLBACK MODE')
+  expect(await text(/^Tasks:/)).toBe('Tasks: 1 of 2 done')
+  expect(await text(/^Now:/)).toBe('Now: TaskUpdate · 0s ago')
+  await ui.unmount()
+
+  state = 'Mode: team\n'
+  now = 10_000 // past the 5 s re-read
+  ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(/AGENT TEAMS/)).toBe('AGENT TEAMS - OPUS 5.5 TEAM MODE')
+  await ui.unmount()
+})
+
+test("a gate that can't run its checks refuses the completion instead of passing it", async ($, on) => {
+  on('process.run', () => ({ deny: 'ENOENT: no such directory /repo.worktrees/eng-1' }))
+  on('classic.TaskCompleted', () => ({}))
+  const r = await $.classic.TaskCompleted(buildTask)
+  expect(r.block).toContain(`couldn't run the checks for "T1 Add todo"`)
+})
