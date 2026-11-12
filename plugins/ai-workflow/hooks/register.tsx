@@ -637,6 +637,7 @@ export const register: Register = (on, options) => {
     const subs = all.filter(s => s.status === 'running')
     const lines = (await read($, log)).slice(-LOG_ROWS)
     const waiting = await read($, asks)
+    const bypass = (await read($, permissionMode)) === 'bypassPermissions'
     const isOpen = await read($, isLogOpen)
 
     return (
@@ -645,7 +646,7 @@ export const register: Register = (on, options) => {
           {icon('team', TEAM_ICON, TEAM_ICON_SIZE)}
           <Box marginLeft={Image ? 2 : 0} flexDirection="column">
             <Text>
-              <Text bold>AGENT TEAMS</Text> - {model} <Text bold color={LEADER_COLOR}>{(mode ?? lead.status).toUpperCase()}</Text>
+              <Text bold>AGENT TEAMS</Text> - {model} <Text bold color={LEADER_COLOR}>{(mode ?? lead.status).toUpperCase()}</Text>{bypass && '  '}{bypass && <Text bold inverse color={ASK_COLOR}> BYPASS </Text>}
             </Text>
             <Text>
               <Text color={LEADER_COLOR}>●</Text> leader  <Text color={AGENTS_COLOR}>●</Text> agents
