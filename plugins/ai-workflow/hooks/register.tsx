@@ -358,9 +358,13 @@ export const register: Register = (on, options) => {
   // since is seen one ask late there (the pane's box, or its auto skip). The PermissionRequest handler
   // below reads the lead's mode at ask time. A subagent's own permission_mode is unverified (see
   // followMode), so its asks use this atom, which stays stale while only subagents work.
+  // The reverse gap: leaving bypass with a stale stored mode, tool.check steps aside (no box) and
+  // PermissionRequest, seeing the real mode, does not allow, so Claude Code's own prompt asks
+  // instead of the pane's box. The call is still asked, never wrongly allowed.
   on('classic.SessionStart', async ($, e, next) => (await followMode($, e), next(e)))
   on('classic.UserPromptSubmit', async ($, e, next) => (await followMode($, e), next(e)))
   // Tools an organisation caps at "ask": PermissionRequest carries no ceiling, tool.check does.
+  // Tool-wide and never cleared, so it errs toward asking the person, never toward allowing.
   const askCeiling = new Set<string>()
   // Bypass mode: the person asked for no stops, so an ask that reaches PermissionRequest is allowed.
   // Exempt: the person's own tools, an "ask" ceiling. A deny never gets here. The lead's mode is the
