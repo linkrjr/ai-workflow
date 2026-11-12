@@ -388,6 +388,372 @@ test('in auto mode an ask is left to the classifier: no permission box', async (
   expect(writes).toEqual([])
 })
 
+test('a mode switched out of auto mid-turn is followed at the next ask', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('tool.check', () => ({ decision: 'ask' as const }))
+  on('classic.UserPromptSubmit', () => ({}))
+  on('classic.PostToolUse', () => ({}))
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => (writes.push(e.value), next(e)))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'auto' })
+  await $.classic.PostToolUse({ tool_name: 'Read', tool_input: {}, tool_response: '', tool_use_id: 'p1', permission_mode: 'default' })
+  void $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't4', approver: 'person' })
+  await settle()
+
+  expect(writes).not.toEqual([])
+})
+
+test('a mode switched out of auto is followed at the ask after its permission request', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('tool.check', () => ({ decision: 'ask' as const }))
+  on('classic.UserPromptSubmit', () => ({}))
+  on('classic.PermissionRequest', () => ({}))
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => (writes.push(e.value), next(e)))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'auto' })
+  await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: {}, permission_mode: 'default' })
+  void $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't6', approver: 'person' })
+  await settle()
+
+  expect(writes).not.toEqual([])
+})
+
+test('a mode switched out of auto with no hook since is only followed one ask late', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.check', () => ({ decision: 'ask' as const }))
+  on('classic.UserPromptSubmit', () => ({}))
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => (writes.push(e.value), next(e)))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'auto' })
+  // the person switches to default here: no lead hook fires before the ask
+  const r = await $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't8', approver: 'person' })
+
+  expect(r.decision).toBe('ask')
+  expect(writes).toEqual([])
+})
+
+for (const hook of ['PermissionDenied', 'PostToolBatch', 'PostToolUseFailure'] as const) {
+  test(`a mode switched out of auto is followed from ${hook}`, async ($, on) => {
+    on('session.start', (_, e) => ({ cwd: e.cwd }))
+    on('ui.open', () => ({ value: { isPlaced: true } }))
+    on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+    on('tool.check', () => ({ decision: 'ask' as const }))
+    on('classic.UserPromptSubmit', () => ({}))
+    on(`classic.${hook}`, () => ({}))
+    const writes: unknown[] = []
+    on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => (writes.push(e.value), next(e)))
+
+    await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+    await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'auto' })
+    await ($.classic as any)[hook]({ tool_name: 'Read', tool_input: {}, tool_response: '', tool_use_id: 'p3', tool_calls: [], permission_mode: 'default' })
+    void $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't9', approver: 'person' })
+    await settle()
+
+    expect(writes).not.toEqual([])
+  })
+}
+
+test('an unchanged mode is not written to state again', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('classic.PostToolUse', () => ({}))
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'permissionMode' }, (_, e, next) => (writes.push(e.value), next(e)))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  for (const id of ['p4', 'p5', 'p6']) await $.classic.PostToolUse({ tool_name: 'Read', tool_input: {}, tool_response: '', tool_use_id: id, permission_mode: 'default' })
+
+  expect(writes).toEqual(['default'])
+})
+
+test('a failing mode write does not fail the hook', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('classic.PostToolUse', () => ({}))
+  on('state.set', { plugin: 'ai-workflow', key: 'permissionMode' }, () => { throw new Error('state down') })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.classic.PostToolUse({ tool_name: 'Read', tool_input: {}, tool_response: '', tool_use_id: 'p7', permission_mode: 'default' })
+
+  expect(r).toEqual({})
+})
+
+test('AC8: the header shows a BYPASS marker only while the mode is bypassPermissions', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('clock.now', () => ({ value: 1_000 }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('classic.PostToolUse', () => ({}))
+  const header = async (ui: any) => (await ui.find({ type: 'Text', text: /^AGENT TEAMS/ }))?.text
+  const marker = async (ui: any) => (await ui.find({ type: 'Text', text: /^ BYPASS $/ }))?.text
+  const hook = (mode?: string) =>
+    $.classic.PostToolUse({ tool_name: 'Read', tool_input: {}, tool_response: '', tool_use_id: `b${Math.random()}`, permission_mode: mode } as any)
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await marker(ui)).toBeUndefined() // unknown mode: absent
+  await hook('bypassPermissions')
+  expect(await marker(ui)).toBe(' BYPASS ')
+  expect(await header(ui)).toBe('AGENT TEAMS - OPUS 5.5 IDLE   BYPASS ')
+  for (const m of ['default', 'auto', 'acceptEdits', 'plan', 'dontAsk']) {
+    await hook(m)
+    expect(await marker(ui)).toBeUndefined()
+  }
+  await ui.unmount()
+})
+
+test('AC8: at a narrow body width the BYPASS chip stays and the run mode is not truncated', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('clock.now', () => ({ value: 1_000 }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('classic.PostToolUse', () => ({}))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.PostToolUse({ tool_name: 'Read', tool_input: {}, tool_response: '', tool_use_id: 'n1', permission_mode: 'bypassPermissions' } as any)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { ...PANE.props, bodyColumns: 40 } })
+  expect((await ui.find({ type: 'Text', text: /^ BYPASS $/ }))?.text).toBe(' BYPASS ')
+  expect((await ui.find({ type: 'Text', text: /^AGENT TEAMS/ }))?.text).toBe('AGENT TEAMS - OPUS 5.5 IDLE   BYPASS ')
+  await ui.unmount()
+})
+
+test("a subagent's permission request does not replace the session's mode", async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.check', () => ({ decision: 'ask' as const }))
+  on('classic.UserPromptSubmit', () => ({}))
+  on('classic.PermissionRequest', () => ({}))
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => (writes.push(e.value), next(e)))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'auto' })
+  await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: {}, permission_mode: 'default', agent_id: 'a1' })
+  const r = await $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't7', approver: 'person' })
+
+  expect(r.decision).toBe('ask')
+  expect(writes).toEqual([])
+})
+
+test("a subagent's own permission mode does not replace the session's", async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.check', () => ({ decision: 'ask' as const }))
+  on('classic.UserPromptSubmit', () => ({}))
+  on('classic.PostToolUse', () => ({}))
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => (writes.push(e.value), next(e)))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'auto' })
+  await $.classic.PostToolUse({ tool_name: 'Read', tool_input: {}, tool_response: '', tool_use_id: 'p2', permission_mode: 'default', agent_id: 'a1' })
+  const r = await $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't5', approver: 'person' })
+
+  expect(r.decision).toBe('ask')
+  expect(writes).toEqual([])
+})
+
+// Bypass mode: every ask the engine still raises is allowed, bar the person's own tools and an
+// organisation's "ask" ceiling. Deny rules never reach an ask, so they stay refused.
+const bypass = async ($: any, on: any, check: Record<string, unknown> = { decision: 'ask' }) => {
+  on('session.start', (_: any, e: any) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('tool.check', () => check)
+  on('classic.UserPromptSubmit', () => ({}))
+  on('classic.PermissionRequest', () => ({}))
+  // Every write of the plugin's asks: the permission box shows what was written last.
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_: any, e: any, next: any) => (writes.push(e.value), next(e)))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  return writes
+}
+const request = ($: any, extra: Record<string, unknown> = {}) =>
+  $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: {}, permission_mode: 'bypassPermissions', ...extra })
+
+test("a lead's permission request in bypass mode is allowed", async ($, on) => {
+  await bypass($, on)
+  const r = await request($)
+
+  expect(r.decision).toEqual({ behavior: 'allow' })
+})
+
+test("a subagent's permission request is allowed while the session is in bypass mode", async ($, on) => {
+  await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  const r = await request($, { agent_id: 'a1', permission_mode: undefined })
+
+  expect(r.decision).toEqual({ behavior: 'allow' })
+})
+
+test("a subagent's permission request is left alone when the session is not in bypass mode", async ($, on) => {
+  await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'default' })
+  const r = await request($, { agent_id: 'a1' })
+
+  expect(r.decision).toBeUndefined()
+})
+
+for (const tool of ['AskUserQuestion', 'ExitPlanMode']) {
+  test(`a ${tool} permission request in bypass mode is left to the person`, async ($, on) => {
+    await bypass($, on)
+    const r = await request($, { tool_name: tool })
+
+    expect(r.decision).toBeUndefined()
+  })
+}
+
+test('a permission request for a tool with an organisation ask ceiling is left to the person', async ($, on) => {
+  await bypass($, on)
+  await $.tool.check({ tool: 'Bash', input: {}, tool_use_id: 'c1', ceiling: 'ask' } as any)
+  const r = await request($)
+
+  expect(r.decision).toBeUndefined()
+})
+
+test("a subagent's permission request is not treated as bypass when the stored mode can't be read", async ($, on) => {
+  on('state.get', { plugin: 'ai-workflow', key: 'permissionMode' }, () => { throw new Error('state down') })
+  await bypass($, on)
+  const r = await request($, { agent_id: 'a1' })
+
+  expect(r.decision).toBeUndefined()
+})
+
+for (const mode of ['default', 'acceptEdits', 'auto', 'plan', 'dontAsk', 'unheard-of', undefined]) {
+  test(`a permission request in ${mode ?? 'an unknown'} mode is not allowed by the plugin`, async ($, on) => {
+    await bypass($, on)
+    const r = await request($, { permission_mode: mode })
+
+    expect(r.decision).toBeUndefined()
+  })
+}
+
+test('a switch into bypass mode is followed at the very next permission request', async ($, on) => {
+  await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'default' })
+  const r = await request($)
+
+  expect(r.decision).toEqual({ behavior: 'allow' })
+})
+
+test('a switch out of bypass mode is followed at the very next permission request', async ($, on) => {
+  await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  const r = await request($, { permission_mode: 'default' })
+
+  expect(r.decision).toBeUndefined()
+})
+
+// The session log: one line per ask the plugin allowed because of bypass mode.
+const logged = ($: any, on: any) => {
+  const lines: { who: string; text: string; isError: boolean }[][] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'log' }, (_: any, e: any, next: any) => (lines.push(e.value), next(e)))
+  return () => lines.at(-1)?.filter(l => l.text.endsWith('(bypass)')).map(l => `${l.who} · ${l.text}`) ?? []
+}
+
+test("a lead's bypass auto-allow adds one session-log line naming Leader and the tool", async ($, on) => {
+  const bypassLines = logged($, on)
+  await bypass($, on)
+  await request($)
+
+  expect(bypassLines()).toEqual(['Leader · allowed Bash (bypass)'])
+})
+
+test("a subagent's bypass auto-allow adds a session-log line naming the subagent", async ($, on) => {
+  const bypassLines = logged($, on)
+  on('agent.spawn', () => ({ model: 'claude-sonnet-5-5', agentId: 'a1' }))
+  await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  await $.agent.spawn({
+    tool_use_id: 't1', prompt: 'go', description: 'fix bug', name: 'backend', subagentType: 'ai-workflow:backend-engineer',
+    provider: { plugin: 'engine', tier: 'core' }, parentModel: 'claude-opus-5-5', background: true, fork: false,
+  })
+  await request($, { agent_id: 'a1', permission_mode: undefined })
+
+  expect(bypassLines()).toEqual(['Backend · allowed Bash (bypass)'])
+})
+
+test('a bypass auto-allow adds no session-log line when Session Log is off, and still allows', { options: { logOn: false } }, async ($, on) => {
+  const bypassLines = logged($, on)
+  await bypass($, on)
+  const r = await request($)
+
+  expect(r.decision).toEqual({ behavior: 'allow' })
+  expect(bypassLines()).toEqual([])
+})
+
+test('a bypass auto-allow still allows when the session-log write fails', async ($, on) => {
+  on('state.set', { plugin: 'ai-workflow', key: 'log' }, () => { throw new Error('state down') })
+  await bypass($, on)
+  const r = await request($)
+
+  expect(r.decision).toEqual({ behavior: 'allow' })
+})
+
+test('a permission request left to the person adds no bypass session-log line', async ($, on) => {
+  const bypassLines = logged($, on)
+  await bypass($, on)
+  await request($, { tool_name: 'AskUserQuestion' })
+
+  expect(bypassLines()).toEqual([])
+})
+
+test('an ask in bypass mode raises no permission box, so the permission request is reached', async ($, on) => {
+  const writes = await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  const r = await $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 'b1', approver: 'person' })
+
+  expect(r.decision).toBe('ask')
+  expect(writes).toEqual([])
+})
+
+test("a subagent's ask in bypass mode raises no permission box", async ($, on) => {
+  const writes = await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  const r = await $.tool.check({ tool: 'Bash', input: {}, tool_use_id: 'b2', approver: 'person', agentId: 'a1' } as any)
+
+  expect(r.decision).toBe('ask')
+  expect(writes).toEqual([])
+})
+
+for (const tool of ['AskUserQuestion', 'ExitPlanMode']) {
+  test(`a ${tool} ask in bypass mode still raises the pane's box`, async ($, on) => {
+    const writes = await bypass($, on)
+    await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+    void $.tool.check({ tool, input: {}, tool_use_id: 'b3', approver: 'person' })
+    await settle()
+
+    expect(writes).not.toEqual([])
+  })
+}
+
+test('an ask with an organisation ask ceiling in bypass mode still raises the pane\'s box', async ($, on) => {
+  const writes = await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  void $.tool.check({ tool: 'Bash', input: {}, tool_use_id: 'b4', approver: 'person', ceiling: 'ask' } as any)
+  await settle()
+
+  expect(writes).not.toEqual([])
+})
+
+test('a deny in bypass mode stays a deny', async ($, on) => {
+  await bypass($, on, { decision: 'deny', reason: 'blocked by a rule' })
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  const r = await $.tool.check({ tool: 'Bash', input: {}, tool_use_id: 'b5', approver: 'person' })
+
+  expect(r.decision).toBe('deny')
+})
+
 test('the usage tool reports the plan limits', async ($, on) => {
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
@@ -397,6 +763,26 @@ test('the usage tool reports the plan limits', async ($, on) => {
 
   const r = await $.tool.call({ tool: 'mcp__ai-workflow__usage' })
   expect(JSON.parse((r.result as { text: string }[])[0]?.text ?? "")).toEqual(rateLimits)
+})
+
+test('the permission_mode tool reports the session mode the hooks last saw', async ($, on) => {
+  on('classic.UserPromptSubmit', () => ({}))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+
+  const r = await $.tool.call({ tool: 'mcp__ai-workflow__permission_mode' })
+  expect((r.result as { text: string }[])[0]?.text).toBe('bypassPermissions')
+})
+
+test('the permission_mode tool reports unknown before any hook carried a mode', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const r = await $.tool.call({ tool: 'mcp__ai-workflow__permission_mode' })
+  expect((r.result as { text: string }[])[0]?.text).toBe('unknown')
 })
 
 test('the compact tool compacts once the main turn ends', async ($, on) => {

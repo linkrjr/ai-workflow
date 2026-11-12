@@ -23,6 +23,9 @@ const isLogOpen = atom({ plugin: 'ai-workflow', key: 'isLogOpen' } as const, tru
 const isPaneOpen = atom({ plugin: 'ai-workflow', key: 'isPaneOpen' } as const, false)
 // Team mode: build tasks per engineer name, from the lead's TaskCreate calls (`Engineer: <name>`).
 const planned = atom({ plugin: 'ai-workflow', key: 'planned' } as const, {} as Record<string, number>)
+// The session's permission mode as the person set it; undefined while unknown. Read by tool.check
+// (and the header), written by every classic hook that carries one.
+const permissionMode = atom({ plugin: 'ai-workflow', key: 'permissionMode' } as const, undefined as string | undefined)
 const ASK_COLOR = 'yellow'
 // How long the pane waits for Proceed / Cancel before the engine's own prompt asks.
 const ASK_WAIT_S = 600
@@ -182,6 +185,10 @@ const promptLine = (text: string) => {
     : { who: 'you', text }
 }
 
+// Who made a call, as the pane names them: the lead, a subagent by name, or an unknown subagent.
+const askerName = (sub: Subagent | undefined, agentId?: string) =>
+  sub ? capitalize(sub.name) : agentId ? 'A subagent' : 'Leader'
+
 async function say($: EngineInterface, who: string, text: string, isError = false) {
   const line: LogLine = { at: await $.clock.now(), who, text, isError }
   await update($, log, all => [...all, line].slice(-60))
@@ -329,18 +336,62 @@ async function bandRow($: EngineInterface, e: RenderInput<'AbovePrompt'>, isAlwa
   )
 }
 
+// Records the session's mode from a classic hook that carries it. Only the lead's hooks count: the
+// engine types give agent_id to subagent calls but don't say whether their permission_mode is the
+// subagent's own or the session's (unverified), so subagent hooks are ignored. A pane failure
+// never blocks a call, so a failed read or write is dropped. No write when the mode is unchanged.
+async function followMode($: EngineInterface, e: { permission_mode?: string; agent_id?: string }) {
+  if (!e.permission_mode || e.agent_id) return
+  try {
+    if ((await read($, permissionMode)) !== e.permission_mode) await update($, permissionMode, () => e.permission_mode)
+  } catch {}
+}
+
 export const register: Register = (on, options) => {
   // Always On off: the pane opens only from the button above the prompt.
   const isAlwaysOn = options.alwaysOn !== false
   const isIconsOn = options.iconsOn !== false
   const isLogOn = options.logOn !== false
 
-  // The session's permission mode, as the last prompt saw it. In auto mode the classifier
-  // answers asks, so the pane stays out of them; the normal dialog asks if it can't.
-  // ponytail: a mode switched mid-turn is seen at the next prompt
-  let mode: string | undefined
-  on('classic.SessionStart', ($, e, next) => ((mode = e.permission_mode), next(e)))
-  on('classic.UserPromptSubmit', ($, e, next) => ((mode = e.permission_mode), next(e)))
+  // The session's permission mode. In auto mode the classifier answers asks, so the pane stays
+  // out of them; the normal dialog asks if it can't. The engine hands tool.call, tool.check and
+  // classic.PreToolUse no mode, so it is refreshed from each classic hook that carries one and
+  // fires near an ask: start, prompt, the ask itself (PermissionRequest, PermissionDenied), and
+  // after every tool call. SubagentStart/Stop always carry an agent_id, so they never count.
+  // ponytail: tool.check runs before PermissionRequest and carries no mode, so a switch with no lead hook
+  // since is seen one ask late there (the pane's box, or its auto skip). The PermissionRequest handler
+  // below reads the lead's mode at ask time. A subagent's own permission_mode is unverified (see
+  // followMode), so its asks use this atom, which stays stale while only subagents work.
+  // The reverse gap: leaving bypass with a stale stored mode, tool.check steps aside (no box) and
+  // PermissionRequest, seeing the real mode, does not allow, so Claude Code's own prompt asks
+  // instead of the pane's box. The call is still asked, never wrongly allowed.
+  on('classic.SessionStart', async ($, e, next) => (await followMode($, e), next(e)))
+  on('classic.UserPromptSubmit', async ($, e, next) => (await followMode($, e), next(e)))
+  // Tools an organisation caps at "ask": PermissionRequest carries no ceiling, tool.check does.
+  // Tool-wide and never cleared, so it errs toward asking the person, never toward allowing.
+  const askCeiling = new Set<string>()
+  // Bypass mode: the person asked for no stops, so an ask that reaches PermissionRequest is allowed.
+  // Exempt: the person's own tools, an "ask" ceiling. A deny never gets here. The lead's mode is the
+  // request's own (ask time); a subagent's is the last one the lead's hooks recorded.
+  on('classic.PermissionRequest', async ($, e, next) => {
+    await followMode($, e)
+    const mode = e.agent_id ? await read($, permissionMode).catch(() => undefined) : e.permission_mode
+    if (mode === 'bypassPermissions' && !PERSON_TOOLS.has(e.tool_name) && !askCeiling.has(e.tool_name)) {
+      // The audit trail. A failed write must never hold up the allow.
+      if (isLogOn) {
+        await (async () => {
+          const sub = e.agent_id ? (await read($, subagents)).find(a => a.id === e.agent_id) : undefined
+          await say($, askerName(sub, e.agent_id), `allowed ${e.tool_name} (bypass)`)
+        })().catch(() => {})
+      }
+      return { decision: { behavior: 'allow' as const } }
+    }
+    return next(e)
+  }).catch(($, e, next) => next(e)) // a panel bug must never answer a request: the prompt asks
+  on('classic.PermissionDenied', async ($, e, next) => (await followMode($, e), next(e)))
+  on('classic.PostToolUse', async ($, e, next) => (await followMode($, e), next(e)))
+  on('classic.PostToolUseFailure', async ($, e, next) => (await followMode($, e), next(e)))
+  on('classic.PostToolBatch', async ($, e, next) => (await followMode($, e), next(e)))
 
   on('classic.TaskCompleted', async ($, e, next) => {
     const block = await taskGate($, e)
@@ -366,6 +417,11 @@ export const register: Register = (on, options) => {
       description: 'Compact the conversation, as /compact does, once the current turn ends.',
       inputSchema: { type: 'object', properties: { instructions: { type: 'string', description: 'What the summary must keep' } } },
     }).catch(err => $.ui.log(`ai-workflow: compact tool not registered: ${err}`))
+    // The orchestrator reads the session's mode through this: the model has no other reliable way to know it.
+    await $.tool.register({
+      name: 'permission_mode',
+      description: "The session's permission mode (default, acceptEdits, auto, bypassPermissions, plan, dontAsk), or unknown.",
+    }).catch(err => $.ui.log(`ai-workflow: permission_mode tool not registered: ${err}`))
     void setupNotice($)
     // A reload (a changed setting) keeps the engine's panes: read whether ours is up.
     await update($, isPaneOpen, () => false)
@@ -457,7 +513,13 @@ export const register: Register = (on, options) => {
   on('tool.check', async ($, e, next) => {
     const r = await next(e)
     const id = e.tool_use_id
-    if (r.decision !== 'ask' || !id || mode === 'auto') return r
+    if (e.ceiling === 'ask') askCeiling.add(e.tool)
+    if (r.decision !== 'ask' || !id) return r
+    // Auto: the classifier answers. Bypass: PermissionRequest allows, so no box may hold the call
+    // up first (the person's own tools and an "ask" ceiling keep theirs).
+    const mode = await read($, permissionMode)
+    if (mode === 'auto') return r
+    if (mode === 'bypassPermissions' && !PERSON_TOOLS.has(e.tool) && e.ceiling !== 'ask') return r
     const sub = (await read($, subagents)).find(a => a.id === e.agentId)
     const shown = askDetail(e.tool, e.input)
     const isPerson = e.approver === 'person' && !PERSON_TOOLS.has(e.tool) && isReadable(shown.detail)
@@ -469,7 +531,7 @@ export const register: Register = (on, options) => {
         : (await $.ui.panes()).find(p => p.id === PANE)
     const ask: Ask = {
       id,
-      who: sub ? capitalize(sub.name) : e.agentId ? 'A subagent' : 'Leader',
+      who: askerName(sub, e.agentId),
       tool: e.tool,
       ...shown,
       reason: r.reason,
@@ -496,6 +558,11 @@ export const register: Register = (on, options) => {
     const instructions = (e as { instructions?: unknown }).instructions
     compactAfterTurn = typeof instructions === 'string' ? { instructions } : {}
     return { result: [{ type: 'text', text: 'The conversation will be compacted when this turn ends.' }] }
+  })
+
+  on('tool.call', { tool: /^mcp__ai-workflow__permission_mode$/ }, async $ => {
+    const mode = await read($, permissionMode).catch(() => undefined)
+    return { result: [{ type: 'text', text: mode ?? 'unknown' }] }
   })
 
   on('tool.call', { tool: /^mcp__ai-workflow__usage$/ }, async $ => {
@@ -604,6 +671,7 @@ export const register: Register = (on, options) => {
     const subs = all.filter(s => s.status === 'running')
     const lines = (await read($, log)).slice(-LOG_ROWS)
     const waiting = await read($, asks)
+    const bypass = (await read($, permissionMode)) === 'bypassPermissions'
     const isOpen = await read($, isLogOpen)
 
     return (
@@ -612,7 +680,7 @@ export const register: Register = (on, options) => {
           {icon('team', TEAM_ICON, TEAM_ICON_SIZE)}
           <Box marginLeft={Image ? 2 : 0} flexDirection="column">
             <Text>
-              <Text bold>AGENT TEAMS</Text> - {model} <Text bold color={LEADER_COLOR}>{(mode ?? lead.status).toUpperCase()}</Text>
+              <Text bold>AGENT TEAMS</Text> - {model} <Text bold color={LEADER_COLOR}>{(mode ?? lead.status).toUpperCase()}</Text>{bypass && '  '}{bypass && <Text bold inverse color={ASK_COLOR}> BYPASS </Text>}
             </Text>
             <Text>
               <Text color={LEADER_COLOR}>●</Text> leader  <Text color={AGENTS_COLOR}>●</Text> agents
