@@ -583,7 +583,7 @@ test('a permission request for a tool with an organisation ask ceiling is left t
   expect(r.decision).toBeUndefined()
 })
 
-test("a subagent's permission request is left to the normal prompt when the stored mode can't be read", async ($, on) => {
+test("a subagent's permission request is not treated as bypass when the stored mode can't be read", async ($, on) => {
   on('state.get', { plugin: 'ai-workflow', key: 'permissionMode' }, () => { throw new Error('state down') })
   await bypass($, on)
   const r = await request($, { agent_id: 'a1' })
