@@ -525,6 +525,135 @@ test("a subagent's own permission mode does not replace the session's", async ($
   expect(writes).toEqual([])
 })
 
+// Bypass mode: every ask the engine still raises is allowed, bar the person's own tools and an
+// organisation's "ask" ceiling. Deny rules never reach an ask, so they stay refused.
+const bypass = async ($: any, on: any, check: Record<string, unknown> = { decision: 'ask' }) => {
+  on('session.start', (_: any, e: any) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+  on('tool.check', () => check)
+  on('classic.UserPromptSubmit', () => ({}))
+  on('classic.PermissionRequest', () => ({}))
+  // Every write of the plugin's asks: the permission box shows what was written last.
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_: any, e: any, next: any) => (writes.push(e.value), next(e)))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  return writes
+}
+const request = ($: any, extra: Record<string, unknown> = {}) =>
+  $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: {}, permission_mode: 'bypassPermissions', ...extra })
+
+test("a lead's permission request in bypass mode is allowed", async ($, on) => {
+  await bypass($, on)
+  const r = await request($)
+
+  expect(r.decision).toEqual({ behavior: 'allow' })
+})
+
+test("a subagent's permission request is allowed while the session is in bypass mode", async ($, on) => {
+  await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  const r = await request($, { agent_id: 'a1', permission_mode: undefined })
+
+  expect(r.decision).toEqual({ behavior: 'allow' })
+})
+
+test("a subagent's permission request is left alone when the session is not in bypass mode", async ($, on) => {
+  await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'default' })
+  const r = await request($, { agent_id: 'a1' })
+
+  expect(r.decision).toBeUndefined()
+})
+
+for (const tool of ['AskUserQuestion', 'ExitPlanMode']) {
+  test(`a ${tool} permission request in bypass mode is left to the person`, async ($, on) => {
+    await bypass($, on)
+    const r = await request($, { tool_name: tool })
+
+    expect(r.decision).toBeUndefined()
+  })
+}
+
+test('a permission request for a tool with an organisation ask ceiling is left to the person', async ($, on) => {
+  await bypass($, on)
+  await $.tool.check({ tool: 'Bash', input: {}, tool_use_id: 'c1', ceiling: 'ask' } as any)
+  const r = await request($)
+
+  expect(r.decision).toBeUndefined()
+})
+
+for (const mode of ['default', 'acceptEdits', 'auto', 'plan', 'dontAsk', 'unheard-of', undefined]) {
+  test(`a permission request in ${mode ?? 'an unknown'} mode is not allowed by the plugin`, async ($, on) => {
+    await bypass($, on)
+    const r = await request($, { permission_mode: mode })
+
+    expect(r.decision).toBeUndefined()
+  })
+}
+
+test('a switch into bypass mode is followed at the very next permission request', async ($, on) => {
+  await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'default' })
+  const r = await request($)
+
+  expect(r.decision).toEqual({ behavior: 'allow' })
+})
+
+test('a switch out of bypass mode is followed at the very next permission request', async ($, on) => {
+  await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  const r = await request($, { permission_mode: 'default' })
+
+  expect(r.decision).toBeUndefined()
+})
+
+test('an ask in bypass mode raises no permission box, so the permission request is reached', async ($, on) => {
+  const writes = await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  const r = await $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 'b1', approver: 'person' })
+
+  expect(r.decision).toBe('ask')
+  expect(writes).toEqual([])
+})
+
+test("a subagent's ask in bypass mode raises no permission box", async ($, on) => {
+  const writes = await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  const r = await $.tool.check({ tool: 'Bash', input: {}, tool_use_id: 'b2', approver: 'person', agentId: 'a1' } as any)
+
+  expect(r.decision).toBe('ask')
+  expect(writes).toEqual([])
+})
+
+for (const tool of ['AskUserQuestion', 'ExitPlanMode']) {
+  test(`a ${tool} ask in bypass mode still raises the pane's box`, async ($, on) => {
+    const writes = await bypass($, on)
+    await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+    void $.tool.check({ tool, input: {}, tool_use_id: 'b3', approver: 'person' })
+    await settle()
+
+    expect(writes).not.toEqual([])
+  })
+}
+
+test('an ask with an organisation ask ceiling in bypass mode still raises the pane\'s box', async ($, on) => {
+  const writes = await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  void $.tool.check({ tool: 'Bash', input: {}, tool_use_id: 'b4', approver: 'person', ceiling: 'ask' } as any)
+  await settle()
+
+  expect(writes).not.toEqual([])
+})
+
+test('a deny in bypass mode stays a deny', async ($, on) => {
+  await bypass($, on, { decision: 'deny', reason: 'blocked by a rule' })
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  const r = await $.tool.check({ tool: 'Bash', input: {}, tool_use_id: 'b5', approver: 'person' })
+
+  expect(r.decision).toBe('deny')
+})
+
 test('the usage tool reports the plan limits', async ($, on) => {
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('ui.open', () => ({ value: { isPlaced: true } }))

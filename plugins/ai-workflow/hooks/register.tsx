@@ -354,12 +354,25 @@ export const register: Register = (on, options) => {
   // classic.PreToolUse no mode, so it is refreshed from each classic hook that carries one and
   // fires near an ask: start, prompt, the ask itself (PermissionRequest, PermissionDenied), and
   // after every tool call. SubagentStart/Stop always carry an agent_id, so they never count.
-  // ponytail: AC7 is best-effort here. tool.check runs before PermissionRequest, so a switch with no lead
-  // hook since is seen one ask late, and while only subagents work no lead hook fires at all. T2 completes
-  // it: an ask-time mode from a PermissionRequest handler, plus tool.check stepping aside.
+  // ponytail: tool.check runs before PermissionRequest and carries no mode, so a switch with no lead hook
+  // since is seen one ask late there (the pane's box, or its auto skip). The PermissionRequest handler
+  // below reads the lead's mode at ask time. A subagent's own permission_mode is unverified (see
+  // followMode), so its asks use this atom, which stays stale while only subagents work.
   on('classic.SessionStart', async ($, e, next) => (await followMode($, e), next(e)))
   on('classic.UserPromptSubmit', async ($, e, next) => (await followMode($, e), next(e)))
-  on('classic.PermissionRequest', async ($, e, next) => (await followMode($, e), next(e)))
+  // Tools an organisation caps at "ask": PermissionRequest carries no ceiling, tool.check does.
+  const askCeiling = new Set<string>()
+  // Bypass mode: the person asked for no stops, so an ask that reaches PermissionRequest is allowed.
+  // Exempt: the person's own tools, an "ask" ceiling. A deny never gets here. The lead's mode is the
+  // request's own (ask time); a subagent's is the last one the lead's hooks recorded.
+  on('classic.PermissionRequest', async ($, e, next) => {
+    await followMode($, e)
+    const mode = e.agent_id ? await read($, permissionMode).catch(() => undefined) : e.permission_mode
+    if (mode === 'bypassPermissions' && !PERSON_TOOLS.has(e.tool_name) && !askCeiling.has(e.tool_name)) {
+      return { decision: { behavior: 'allow' as const } }
+    }
+    return next(e)
+  }).catch(($, e, next) => next(e)) // a panel bug must never answer a request: the prompt asks
   on('classic.PermissionDenied', async ($, e, next) => (await followMode($, e), next(e)))
   on('classic.PostToolUse', async ($, e, next) => (await followMode($, e), next(e)))
   on('classic.PostToolUseFailure', async ($, e, next) => (await followMode($, e), next(e)))
@@ -480,7 +493,13 @@ export const register: Register = (on, options) => {
   on('tool.check', async ($, e, next) => {
     const r = await next(e)
     const id = e.tool_use_id
-    if (r.decision !== 'ask' || !id || (await read($, permissionMode)) === 'auto') return r
+    if (e.ceiling === 'ask') askCeiling.add(e.tool)
+    if (r.decision !== 'ask' || !id) return r
+    // Auto: the classifier answers. Bypass: PermissionRequest allows, so no box may hold the call
+    // up first (the person's own tools and an "ask" ceiling keep theirs).
+    const mode = await read($, permissionMode)
+    if (mode === 'auto') return r
+    if (mode === 'bypassPermissions' && !PERSON_TOOLS.has(e.tool) && e.ceiling !== 'ask') return r
     const sub = (await read($, subagents)).find(a => a.id === e.agentId)
     const shown = askDetail(e.tool, e.input)
     const isPerson = e.approver === 'person' && !PERSON_TOOLS.has(e.tool) && isReadable(shown.detail)
