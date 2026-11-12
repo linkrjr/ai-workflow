@@ -536,6 +536,26 @@ test('the usage tool reports the plan limits', async ($, on) => {
   expect(JSON.parse((r.result as { text: string }[])[0]?.text ?? "")).toEqual(rateLimits)
 })
 
+test('the permission_mode tool reports the session mode the hooks last saw', async ($, on) => {
+  on('classic.UserPromptSubmit', () => ({}))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+
+  const r = await $.tool.call({ tool: 'mcp__ai-workflow__permission_mode' })
+  expect((r.result as { text: string }[])[0]?.text).toBe('bypassPermissions')
+})
+
+test('the permission_mode tool reports unknown before any hook carried a mode', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const r = await $.tool.call({ tool: 'mcp__ai-workflow__permission_mode' })
+  expect((r.result as { text: string }[])[0]?.text).toBe('unknown')
+})
+
 test('the compact tool compacts once the main turn ends', async ($, on) => {
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('ui.open', () => ({ value: { isPlaced: true } }))

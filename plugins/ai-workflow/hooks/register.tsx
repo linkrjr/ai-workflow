@@ -389,6 +389,11 @@ export const register: Register = (on, options) => {
       description: 'Compact the conversation, as /compact does, once the current turn ends.',
       inputSchema: { type: 'object', properties: { instructions: { type: 'string', description: 'What the summary must keep' } } },
     }).catch(err => $.ui.log(`ai-workflow: compact tool not registered: ${err}`))
+    // The orchestrator reads the session's mode through this: the model has no other reliable way to know it.
+    await $.tool.register({
+      name: 'permission_mode',
+      description: "The session's permission mode (default, acceptEdits, auto, bypassPermissions, plan, dontAsk), or unknown.",
+    }).catch(err => $.ui.log(`ai-workflow: permission_mode tool not registered: ${err}`))
     void setupNotice($)
     // A reload (a changed setting) keeps the engine's panes: read whether ours is up.
     await update($, isPaneOpen, () => false)
@@ -519,6 +524,11 @@ export const register: Register = (on, options) => {
     const instructions = (e as { instructions?: unknown }).instructions
     compactAfterTurn = typeof instructions === 'string' ? { instructions } : {}
     return { result: [{ type: 'text', text: 'The conversation will be compacted when this turn ends.' }] }
+  })
+
+  on('tool.call', { tool: /^mcp__ai-workflow__permission_mode$/ }, async $ => {
+    const mode = await read($, permissionMode).catch(() => undefined)
+    return { result: [{ type: 'text', text: mode ?? 'unknown' }] }
   })
 
   on('tool.call', { tool: /^mcp__ai-workflow__usage$/ }, async $ => {
