@@ -345,13 +345,18 @@ export const register: Register = (on, options) => {
   const isLogOn = options.logOn !== false
 
   // The session's permission mode. In auto mode the classifier answers asks, so the pane stays
-  // out of them; the normal dialog asks if it can't. The engine hands tool.check no mode, so it
-  // is refreshed from each classic hook that carries one (start, prompt, and after every tool call).
-  // ponytail: a switch between two hooks is seen at the next one, not at the ask itself
+  // out of them; the normal dialog asks if it can't. The engine hands tool.call, tool.check and
+  // classic.PreToolUse no mode, so it is refreshed from each classic hook that carries one and
+  // fires near an ask: start, prompt, the ask itself (PermissionRequest, PermissionDenied), and
+  // after every tool call. SubagentStart/Stop always carry an agent_id, so they never count.
+  // ponytail: tool.check runs before PermissionRequest, so a switch since the last hook is seen one ask late
   on('classic.SessionStart', async ($, e, next) => (await followMode($, e), next(e)))
   on('classic.UserPromptSubmit', async ($, e, next) => (await followMode($, e), next(e)))
+  on('classic.PermissionRequest', async ($, e, next) => (await followMode($, e), next(e)))
+  on('classic.PermissionDenied', async ($, e, next) => (await followMode($, e), next(e)))
   on('classic.PostToolUse', async ($, e, next) => (await followMode($, e), next(e)))
   on('classic.PostToolUseFailure', async ($, e, next) => (await followMode($, e), next(e)))
+  on('classic.PostToolBatch', async ($, e, next) => (await followMode($, e), next(e)))
 
   on('classic.TaskCompleted', async ($, e, next) => {
     const block = await taskGate($, e)
