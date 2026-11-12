@@ -489,6 +489,30 @@ test('a failing mode write does not fail the hook', async ($, on) => {
   expect(r).toEqual({})
 })
 
+test('AC8: the header shows a BYPASS marker only while the mode is bypassPermissions', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('clock.now', () => ({ value: 1_000 }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('classic.PostToolUse', () => ({}))
+  const header = async (ui: any) => (await ui.find({ type: 'Text', text: /^AGENT TEAMS/ }))?.text
+  const marker = async (ui: any) => (await ui.find({ type: 'Text', text: /^ BYPASS $/ }))?.text
+  const hook = (mode?: string) =>
+    $.classic.PostToolUse({ tool_name: 'Read', tool_input: {}, tool_response: '', tool_use_id: `b${Math.random()}`, permission_mode: mode } as any)
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await marker(ui)).toBeUndefined() // unknown mode: absent
+  await hook('bypassPermissions')
+  expect(await marker(ui)).toBe(' BYPASS ')
+  expect(await header(ui)).toBe('AGENT TEAMS - OPUS 5.5 IDLE   BYPASS ')
+  for (const m of ['default', 'auto', 'acceptEdits', 'plan', 'dontAsk']) {
+    await hook(m)
+    expect(await marker(ui)).toBeUndefined()
+  }
+  await ui.unmount()
+})
+
 test("a subagent's permission request does not replace the session's mode", async ($, on) => {
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
