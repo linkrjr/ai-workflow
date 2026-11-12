@@ -6,10 +6,10 @@
     "semantic_hash": "966397858f6aa2f71f5cf1e2866106d5"
   },
   "engine-types/claude-code-mcp/index.d.ts": {
-    "mtime": 1794457727.8753338,
-    "seen": 1794459365.588829,
-    "ast_hash": "0040a12431cd4e29240947ff0d2921d3",
-    "semantic_hash": "0040a12431cd4e29240947ff0d2921d3"
+    "mtime": 1794461694.0673523,
+    "seen": 1794461695.5313568,
+    "ast_hash": "44024364944753f7de5e1e8194f9920a",
+    "semantic_hash": ""
   },
   "engine-types/claude-code-tools/index.d.ts": {
     "mtime": 1794457727.8771775,
@@ -60,10 +60,10 @@
     "semantic_hash": "dfb79d785df6d761f0d760a0708658e0"
   },
   "plugins/ai-workflow/hooks/register.tsx": {
-    "mtime": 1794457727.8747392,
-    "seen": 1794459365.588834,
-    "ast_hash": "4575921743ee4313284c75aa8b97709e",
-    "semantic_hash": "4575921743ee4313284c75aa8b97709e"
+    "mtime": 1794463095.8103764,
+    "seen": 1794463097.269654,
+    "ast_hash": "44eddd6aa4c53d8a6305577f3b2f52d1",
+    "semantic_hash": ""
   },
   "plugins/ai-workflow/skills/jev/scripts/jev.sh": {
     "mtime": 1794457727.8770754,
@@ -126,10 +126,10 @@
     "semantic_hash": "320d1e7c9fc72c735667b2499af22031"
   },
   "plugins/ai-workflow/tests/pane.test.tsx": {
-    "mtime": 1794457727.8779747,
-    "seen": 1794459365.5888388,
-    "ast_hash": "9b8225a07baf0adc84ccd63ec44541c9",
-    "semantic_hash": "9b8225a07baf0adc84ccd63ec44541c9"
+    "mtime": 1794463095.8110368,
+    "seen": 1794463097.26966,
+    "ast_hash": "7c527f86b43708234a63f1f3045ad74b",
+    "semantic_hash": ""
   },
   "plugins/ai-workflow/tsconfig.json": {
     "mtime": 1794457727.878677,
@@ -138,10 +138,10 @@
     "semantic_hash": "a405a312630a41b14d308de376581988"
   },
   "plugins/ai-workflow/types/index.d.ts": {
-    "mtime": 1794457727.8787546,
-    "seen": 1794459365.58884,
-    "ast_hash": "ece019907482f5d2ea943b3d27cd6449",
-    "semantic_hash": "ece019907482f5d2ea943b3d27cd6449"
+    "mtime": 1794461226.2015216,
+    "seen": 1794461228.3580449,
+    "ast_hash": "bfd79e678958280b978f96fbaa4be5a4",
+    "semantic_hash": ""
   },
   "plugins/pomodoro/.claude-plugin/plugin.json": {
     "mtime": 1794457727.8789284,
@@ -414,10 +414,10 @@
     "semantic_hash": "45fac07b6e3ca0e2a09263ff87af729c"
   },
   "plugins/ai-workflow/skills/orchestrator/team-mode.md": {
-    "mtime": 1794457727.8779593,
-    "seen": 1794459365.5888581,
-    "ast_hash": "11a825b5848e5e6a25eed4e9d80fade2",
-    "semantic_hash": "11a825b5848e5e6a25eed4e9d80fade2"
+    "mtime": 1794461694.0683758,
+    "seen": 1794461695.531403,
+    "ast_hash": "c94856f450f38266c9d9c6fadea66901",
+    "semantic_hash": ""
   },
   "plugins/ai-workflow/skills/safe-refactor/SKILL.md": {
     "mtime": 1794457727.8751822,
@@ -538,5 +538,173 @@
     "seen": 1794459365.588869,
     "ast_hash": "9de6110e41cf72a7aa0f04110bac56b4",
     "semantic_hash": "9de6110e41cf72a7aa0f04110bac56b4"
+  },
+  "intent/2026-11-12-auto-allow-asks-in-bypass-mode.md": {
+    "mtime": 1794462338.667068,
+    "seen": 1794463097.2696698,
+    "ast_hash": "1772c607983de0d01d740ea7216d7320",
+    "semantic_hash": ""
+  },
+  "intent/2026-11-12-bypass-header-marker.md": {
+    "mtime": 1794461896.3617063,
+    "seen": 1794462338.1194901,
+    "ast_hash": "4f8c9c5145c9e61077f1dc5a83414024",
+    "semantic_hash": ""
+  },
+  "intent/2026-11-12-follow-permission-mode-per-tool-call.md": {
+    "mtime": 1794461235.9807885,
+    "seen": 1794461695.531384,
+    "ast_hash": "55b1b4374e6746a3edd8ccb91877ead9",
+    "semantic_hash": ""
+  },
+  "intent/2026-11-12-log-bypass-allows.md": {
+    "mtime": 1794462509.3307142,
+    "seen": 1794463097.269672,
+    "ast_hash": "df1c08d2d5c95d08a2988d4fa256ccd6",
+    "semantic_hash": ""
+  },
+  "intent/2026-11-12-team-mode-skips-git-allow-in-bypass.md": {
+    "mtime": 1794461696.191296,
+    "seen": 1794461895.8728378,
+    "ast_hash": "498521df5980e12c087553cedb6cf0a3",
+    "semantic_hash": ""
+  },
+  "assets/pipeline-sequence.png": {
+    "mtime": 1794457727.8780246,
+    "seen": 1794461228.358144,
+    "ast_hash": "6d6015fb21b094819212450114c81ba2",
+    "semantic_hash": ""
+  },
+  "assets/pipeline-sequence.svg": {
+    "mtime": 1794457727.8788855,
+    "seen": 1794461228.3581572,
+    "ast_hash": "763fb8c82f2bb3111bf30f76b6b2a92b",
+    "semantic_hash": ""
+  },
+  "assets/pipeline-swimlane.png": {
+    "mtime": 1794457727.8791916,
+    "seen": 1794461228.358159,
+    "ast_hash": "091d8a71e72318a1bc4135182474be6e",
+    "semantic_hash": ""
+  },
+  "assets/pipeline-swimlane.svg": {
+    "mtime": 1794457727.8794334,
+    "seen": 1794461228.3581598,
+    "ast_hash": "b46d15ba8534f2d5b15bf457507b2e85",
+    "semantic_hash": ""
+  },
+  "assets/pipeline.png": {
+    "mtime": 1794457727.8798745,
+    "seen": 1794461228.358162,
+    "ast_hash": "5f79736e25da4f5a151086290dfc88bd",
+    "semantic_hash": ""
+  },
+  "assets/pipeline.svg": {
+    "mtime": 1794457727.8800142,
+    "seen": 1794461228.3581629,
+    "ast_hash": "fbf07148a193e49a87ad6ae2d2525e4f",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/backend-engineer.png": {
+    "mtime": 1794457727.874839,
+    "seen": 1794461228.358164,
+    "ast_hash": "4dc9a680a8cbc53ad0e65c5fe60246f7",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/backend-engineer.svg": {
+    "mtime": 1794457727.8750484,
+    "seen": 1794461228.358165,
+    "ast_hash": "11178f3f252811719bf3234ca59552d2",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/code-reviewer.png": {
+    "mtime": 1794457727.8753762,
+    "seen": 1794461228.358166,
+    "ast_hash": "6ab2f59814f2e922e8c8d9ba08ac9883",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/code-reviewer.svg": {
+    "mtime": 1794457727.875971,
+    "seen": 1794461228.358167,
+    "ast_hash": "12f1b18f66cb7efd080da1d08997877f",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/designer.png": {
+    "mtime": 1794457727.8762412,
+    "seen": 1794461228.3581681,
+    "ast_hash": "94446a988a379f5d5ff47cc9bc904618",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/designer.svg": {
+    "mtime": 1794457727.8764386,
+    "seen": 1794461228.358169,
+    "ast_hash": "341b9ddaed03ca05fac6c6b1718c5564",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/frontend-engineer.png": {
+    "mtime": 1794457727.8731377,
+    "seen": 1794461228.35817,
+    "ast_hash": "d4ffdc7cdf9f1cb820b14a6a3655ae92",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/frontend-engineer.svg": {
+    "mtime": 1794457727.8732808,
+    "seen": 1794461228.358171,
+    "ast_hash": "fb3f30bc8d9bd5e061c6308c1897d684",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/qa-tester.png": {
+    "mtime": 1794457727.8735735,
+    "seen": 1794461228.358173,
+    "ast_hash": "582cb008bf33a8df32887ddeebac6ca1",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/qa-tester.svg": {
+    "mtime": 1794457727.8744197,
+    "seen": 1794461228.3581738,
+    "ast_hash": "70277c1331282b3a07029d6c2943ffc3",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/team.png": {
+    "mtime": 1794457727.8745437,
+    "seen": 1794461228.358175,
+    "ast_hash": "abccfca7640bce9332abecf6d7559a9e",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/team.svg": {
+    "mtime": 1794457727.8747334,
+    "seen": 1794461228.358176,
+    "ast_hash": "ceb0a53b3087da3a9ad51b2e7ab273eb",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/ticket-reviewer.png": {
+    "mtime": 1794457727.8751936,
+    "seen": 1794461228.358177,
+    "ast_hash": "a75953262a961b79d0b82010998d03eb",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/ticket-reviewer.svg": {
+    "mtime": 1794457727.8756955,
+    "seen": 1794461228.3581781,
+    "ast_hash": "c37ad21b0cd001015683f4741ee2cbdb",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/writer.png": {
+    "mtime": 1794457727.875972,
+    "seen": 1794461228.358179,
+    "ast_hash": "7e12345dda43f85bc82e1839e15fbe47",
+    "semantic_hash": ""
+  },
+  "plugins/ai-workflow/assets/icons/writer.svg": {
+    "mtime": 1794457727.8763945,
+    "seen": 1794461228.35818,
+    "ast_hash": "7e4c11725c990e1d2d5467ad3afbfba4",
+    "semantic_hash": ""
+  },
+  "plugins/pomodoro/assets/sounds/pomodoro-ring.wav": {
+    "mtime": 1794457727.8782845,
+    "seen": 1794461228.3581812,
+    "ast_hash": "3805e7d8118beda50813bfa95d0d6581",
+    "semantic_hash": ""
   }
 }
