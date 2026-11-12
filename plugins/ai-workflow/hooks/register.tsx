@@ -23,6 +23,9 @@ const isLogOpen = atom({ plugin: 'ai-workflow', key: 'isLogOpen' } as const, tru
 const isPaneOpen = atom({ plugin: 'ai-workflow', key: 'isPaneOpen' } as const, false)
 // Team mode: build tasks per engineer name, from the lead's TaskCreate calls (`Engineer: <name>`).
 const planned = atom({ plugin: 'ai-workflow', key: 'planned' } as const, {} as Record<string, number>)
+// The session's permission mode as the person set it; undefined while unknown. Read by tool.check
+// (and the header), written by every classic hook that carries one.
+const permissionMode = atom({ plugin: 'ai-workflow', key: 'permissionMode' } as const, undefined as string | undefined)
 const ASK_COLOR = 'yellow'
 // How long the pane waits for Proceed / Cancel before the engine's own prompt asks.
 const ASK_WAIT_S = 600
@@ -329,18 +332,26 @@ async function bandRow($: EngineInterface, e: RenderInput<'AbovePrompt'>, isAlwa
   )
 }
 
+// Records the session's mode from a classic hook that carries it. A subagent's hook carries the
+// subagent's own mode, so only the lead's count.
+async function followMode($: EngineInterface, e: { permission_mode?: string; agent_id?: string }) {
+  if (e.permission_mode && !e.agent_id) await update($, permissionMode, () => e.permission_mode)
+}
+
 export const register: Register = (on, options) => {
   // Always On off: the pane opens only from the button above the prompt.
   const isAlwaysOn = options.alwaysOn !== false
   const isIconsOn = options.iconsOn !== false
   const isLogOn = options.logOn !== false
 
-  // The session's permission mode, as the last prompt saw it. In auto mode the classifier
-  // answers asks, so the pane stays out of them; the normal dialog asks if it can't.
-  // ponytail: a mode switched mid-turn is seen at the next prompt
-  let mode: string | undefined
-  on('classic.SessionStart', ($, e, next) => ((mode = e.permission_mode), next(e)))
-  on('classic.UserPromptSubmit', ($, e, next) => ((mode = e.permission_mode), next(e)))
+  // The session's permission mode. In auto mode the classifier answers asks, so the pane stays
+  // out of them; the normal dialog asks if it can't. The engine hands tool.check no mode, so it
+  // is refreshed from each classic hook that carries one (start, prompt, and after every tool call).
+  // ponytail: a switch between two hooks is seen at the next one, not at the ask itself
+  on('classic.SessionStart', async ($, e, next) => (await followMode($, e), next(e)))
+  on('classic.UserPromptSubmit', async ($, e, next) => (await followMode($, e), next(e)))
+  on('classic.PostToolUse', async ($, e, next) => (await followMode($, e), next(e)))
+  on('classic.PostToolUseFailure', async ($, e, next) => (await followMode($, e), next(e)))
 
   on('classic.TaskCompleted', async ($, e, next) => {
     const block = await taskGate($, e)
@@ -457,7 +468,7 @@ export const register: Register = (on, options) => {
   on('tool.check', async ($, e, next) => {
     const r = await next(e)
     const id = e.tool_use_id
-    if (r.decision !== 'ask' || !id || mode === 'auto') return r
+    if (r.decision !== 'ask' || !id || (await read($, permissionMode)) === 'auto') return r
     const sub = (await read($, subagents)).find(a => a.id === e.agentId)
     const shown = askDetail(e.tool, e.input)
     const isPerson = e.approver === 'person' && !PERSON_TOOLS.has(e.tool) && isReadable(shown.detail)
