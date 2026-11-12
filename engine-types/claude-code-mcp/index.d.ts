@@ -14,5 +14,7 @@ declare module 'claude-code' {
     }
     /** The plan rate-limit windows (five_hour, seven_day, ...): percent used and reset time. */
     "mcp__ai-workflow__usage": {}
+    /** The session's permission mode (default, acceptEdits, auto, bypassPermissions, plan, dontAsk), or unknown. */
+    "mcp__ai-workflow__permission_mode": {}
   }
 }
