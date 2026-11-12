@@ -332,10 +332,15 @@ async function bandRow($: EngineInterface, e: RenderInput<'AbovePrompt'>, isAlwa
   )
 }
 
-// Records the session's mode from a classic hook that carries it. A subagent's hook carries the
-// subagent's own mode, so only the lead's count.
+// Records the session's mode from a classic hook that carries it. Only the lead's hooks count: the
+// engine types give agent_id to subagent calls but don't say whether their permission_mode is the
+// subagent's own or the session's (unverified), so subagent hooks are ignored. A pane failure
+// never blocks a call, so a failed read or write is dropped. No write when the mode is unchanged.
 async function followMode($: EngineInterface, e: { permission_mode?: string; agent_id?: string }) {
-  if (e.permission_mode && !e.agent_id) await update($, permissionMode, () => e.permission_mode)
+  if (!e.permission_mode || e.agent_id) return
+  try {
+    if ((await read($, permissionMode)) !== e.permission_mode) await update($, permissionMode, () => e.permission_mode)
+  } catch {}
 }
 
 export const register: Register = (on, options) => {
@@ -349,7 +354,9 @@ export const register: Register = (on, options) => {
   // classic.PreToolUse no mode, so it is refreshed from each classic hook that carries one and
   // fires near an ask: start, prompt, the ask itself (PermissionRequest, PermissionDenied), and
   // after every tool call. SubagentStart/Stop always carry an agent_id, so they never count.
-  // ponytail: tool.check runs before PermissionRequest, so a switch since the last hook is seen one ask late
+  // ponytail: AC7 is best-effort here. tool.check runs before PermissionRequest, so a switch with no lead
+  // hook since is seen one ask late, and while only subagents work no lead hook fires at all. T2 completes
+  // it: an ask-time mode from a PermissionRequest handler, plus tool.check stepping aside.
   on('classic.SessionStart', async ($, e, next) => (await followMode($, e), next(e)))
   on('classic.UserPromptSubmit', async ($, e, next) => (await followMode($, e), next(e)))
   on('classic.PermissionRequest', async ($, e, next) => (await followMode($, e), next(e)))

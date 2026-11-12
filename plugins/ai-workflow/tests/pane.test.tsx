@@ -407,7 +407,7 @@ test('a mode switched out of auto mid-turn is followed at the next ask', async (
   expect(writes).not.toEqual([])
 })
 
-test('a mode switched out of auto is followed from the permission request of the ask', async ($, on) => {
+test('a mode switched out of auto is followed at the ask after its permission request', async ($, on) => {
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
@@ -424,6 +424,69 @@ test('a mode switched out of auto is followed from the permission request of the
   await settle()
 
   expect(writes).not.toEqual([])
+})
+
+test('a mode switched out of auto with no hook since is only followed one ask late', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.check', () => ({ decision: 'ask' as const }))
+  on('classic.UserPromptSubmit', () => ({}))
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => (writes.push(e.value), next(e)))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'auto' })
+  // the person switches to default here: no lead hook fires before the ask
+  const r = await $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't8', approver: 'person' })
+
+  expect(r.decision).toBe('ask')
+  expect(writes).toEqual([])
+})
+
+for (const hook of ['PermissionDenied', 'PostToolBatch', 'PostToolUseFailure'] as const) {
+  test(`a mode switched out of auto is followed from ${hook}`, async ($, on) => {
+    on('session.start', (_, e) => ({ cwd: e.cwd }))
+    on('ui.open', () => ({ value: { isPlaced: true } }))
+    on('clock.now', () => ({ value: Date.parse('2026-10-25T14:20:00') }))
+    on('tool.check', () => ({ decision: 'ask' as const }))
+    on('classic.UserPromptSubmit', () => ({}))
+    on(`classic.${hook}`, () => ({}))
+    const writes: unknown[] = []
+    on('state.set', { plugin: 'ai-workflow', key: 'asks' }, (_, e, next) => (writes.push(e.value), next(e)))
+
+    await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+    await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'auto' })
+    await ($.classic as any)[hook]({ tool_name: 'Read', tool_input: {}, tool_response: '', tool_use_id: 'p3', tool_calls: [], permission_mode: 'default' })
+    void $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 't9', approver: 'person' })
+    await settle()
+
+    expect(writes).not.toEqual([])
+  })
+}
+
+test('an unchanged mode is not written to state again', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('classic.PostToolUse', () => ({}))
+  const writes: unknown[] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'permissionMode' }, (_, e, next) => (writes.push(e.value), next(e)))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  for (const id of ['p4', 'p5', 'p6']) await $.classic.PostToolUse({ tool_name: 'Read', tool_input: {}, tool_response: '', tool_use_id: id, permission_mode: 'default' })
+
+  expect(writes).toEqual(['default'])
+})
+
+test('a failing mode write does not fail the hook', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('classic.PostToolUse', () => ({}))
+  on('state.set', { plugin: 'ai-workflow', key: 'permissionMode' }, () => { throw new Error('state down') })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.classic.PostToolUse({ tool_name: 'Read', tool_input: {}, tool_response: '', tool_use_id: 'p7', permission_mode: 'default' })
+
+  expect(r).toEqual({})
 })
 
 test("a subagent's permission request does not replace the session's mode", async ($, on) => {
