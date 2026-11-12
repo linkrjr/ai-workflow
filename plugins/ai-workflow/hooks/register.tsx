@@ -185,6 +185,10 @@ const promptLine = (text: string) => {
     : { who: 'you', text }
 }
 
+// Who made a call, as the pane names them: the lead, a subagent by name, or an unknown subagent.
+const askerName = (sub: Subagent | undefined, agentId?: string) =>
+  sub ? capitalize(sub.name) : agentId ? 'A subagent' : 'Leader'
+
 async function say($: EngineInterface, who: string, text: string, isError = false) {
   const line: LogLine = { at: await $.clock.now(), who, text, isError }
   await update($, log, all => [...all, line].slice(-60))
@@ -373,6 +377,13 @@ export const register: Register = (on, options) => {
     await followMode($, e)
     const mode = e.agent_id ? await read($, permissionMode).catch(() => undefined) : e.permission_mode
     if (mode === 'bypassPermissions' && !PERSON_TOOLS.has(e.tool_name) && !askCeiling.has(e.tool_name)) {
+      // The audit trail. A failed write must never hold up the allow.
+      if (isLogOn) {
+        await (async () => {
+          const sub = e.agent_id ? (await read($, subagents)).find(a => a.id === e.agent_id) : undefined
+          await say($, askerName(sub, e.agent_id), `allowed ${e.tool_name} (bypass)`)
+        })().catch(() => {})
+      }
       return { decision: { behavior: 'allow' as const } }
     }
     return next(e)
@@ -520,7 +531,7 @@ export const register: Register = (on, options) => {
         : (await $.ui.panes()).find(p => p.id === PANE)
     const ask: Ask = {
       id,
-      who: sub ? capitalize(sub.name) : e.agentId ? 'A subagent' : 'Leader',
+      who: askerName(sub, e.agentId),
       tool: e.tool,
       ...shown,
       reason: r.reason,
