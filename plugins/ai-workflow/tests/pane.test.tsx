@@ -654,6 +654,60 @@ test('a switch out of bypass mode is followed at the very next permission reques
   expect(r.decision).toBeUndefined()
 })
 
+// The session log: one line per ask the plugin allowed because of bypass mode.
+const logged = ($: any, on: any) => {
+  const lines: { who: string; text: string; isError: boolean }[][] = []
+  on('state.set', { plugin: 'ai-workflow', key: 'log' }, (_: any, e: any, next: any) => (lines.push(e.value), next(e)))
+  return () => lines.at(-1)?.filter(l => l.text.endsWith('(bypass)')).map(l => `${l.who} · ${l.text}`) ?? []
+}
+
+test("a lead's bypass auto-allow adds one session-log line naming Leader and the tool", async ($, on) => {
+  const bypassLines = logged($, on)
+  await bypass($, on)
+  await request($)
+
+  expect(bypassLines()).toEqual(['Leader · allowed Bash (bypass)'])
+})
+
+test("a subagent's bypass auto-allow adds a session-log line naming the subagent", async ($, on) => {
+  const bypassLines = logged($, on)
+  on('agent.spawn', () => ({ model: 'claude-sonnet-5-5', agentId: 'a1' }))
+  await bypass($, on)
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  await $.agent.spawn({
+    tool_use_id: 't1', prompt: 'go', description: 'fix bug', name: 'backend', subagentType: 'ai-workflow:backend-engineer',
+    provider: { plugin: 'engine', tier: 'core' }, parentModel: 'claude-opus-5-5', background: true, fork: false,
+  })
+  await request($, { agent_id: 'a1', permission_mode: undefined })
+
+  expect(bypassLines()).toEqual(['Backend · allowed Bash (bypass)'])
+})
+
+test('a bypass auto-allow adds no session-log line when Session Log is off, and still allows', { options: { logOn: false } }, async ($, on) => {
+  const bypassLines = logged($, on)
+  await bypass($, on)
+  const r = await request($)
+
+  expect(r.decision).toEqual({ behavior: 'allow' })
+  expect(bypassLines()).toEqual([])
+})
+
+test('a bypass auto-allow still allows when the session-log write fails', async ($, on) => {
+  on('state.set', { plugin: 'ai-workflow', key: 'log' }, () => { throw new Error('state down') })
+  await bypass($, on)
+  const r = await request($)
+
+  expect(r.decision).toEqual({ behavior: 'allow' })
+})
+
+test('a permission request left to the person adds no bypass session-log line', async ($, on) => {
+  const bypassLines = logged($, on)
+  await bypass($, on)
+  await request($, { tool_name: 'AskUserQuestion' })
+
+  expect(bypassLines()).toEqual([])
+})
+
 test('an ask in bypass mode raises no permission box, so the permission request is reached', async ($, on) => {
   const writes = await bypass($, on)
   await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
