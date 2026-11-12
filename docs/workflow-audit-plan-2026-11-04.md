@@ -4,7 +4,7 @@ Covers all 45 items in `docs/workflow-audit-2026-11-04.md`. Flaw, Speed and Toke
 
 ## Progress
 
-Work is on the local branch `workflow-audit-fixes`, not pushed. All 10 phases are done, except testing the README's allow rule, which no command in either test run needed. One real run on this branch (Nov 9) finished end to end. CI has never run, and nothing is published yet.
+All 10 phases are done and merged into `main` as ai-workflow 2.0.0 (PR #6, Nov 11), with CI passing. The only open item is testing the README's allow rule, which no command in either test run needed. One real run on the branch (Nov 9) finished end to end.
 
 The plugin now lives in `plugins/ai-workflow/`, so test runs need `claude --plugin-dir ~/Projects/repos/projects/ai-workflow/plugins/ai-workflow --model opus --effort medium`. Without `--plugin-dir`, the installed 1.4.0 plugin runs instead, as it did on Nov 8.
 
