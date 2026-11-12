@@ -513,6 +513,20 @@ test('AC8: the header shows a BYPASS marker only while the mode is bypassPermiss
   await ui.unmount()
 })
 
+test('AC8: at a narrow body width the BYPASS chip stays and the run mode is not truncated', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('clock.now', () => ({ value: 1_000 }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('classic.PostToolUse', () => ({}))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.classic.PostToolUse({ tool_name: 'Read', tool_input: {}, tool_response: '', tool_use_id: 'n1', permission_mode: 'bypassPermissions' } as any)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { ...PANE.props, bodyColumns: 40 } })
+  expect((await ui.find({ type: 'Text', text: /^ BYPASS $/ }))?.text).toBe(' BYPASS ')
+  expect((await ui.find({ type: 'Text', text: /^AGENT TEAMS/ }))?.text).toBe('AGENT TEAMS - OPUS 5.5 IDLE   BYPASS ')
+  await ui.unmount()
+})
+
 test("a subagent's permission request does not replace the session's mode", async ($, on) => {
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
