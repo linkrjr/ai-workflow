@@ -133,7 +133,12 @@ Every run works on a feature branch. Task PRs target it and you merge them into 
 2. On the default branch → `git switch -c feature/<spec slug>` (the spec's file name without `.md`), or `git switch feature/<spec slug>` if it already exists, then `git push -u origin feature/<spec slug>`.
 3. On `feature/<another slug>` → an earlier spec's branch, not this one's. Ask "Branch from <default branch>" (Recommended) / "Build on <branch>", saying that building on it puts that spec's work in this feature PR too. On "Branch from", `git switch <default branch> && git pull --ff-only`, then step 2.
 4. On any other branch, or on "Build on" → that branch is the feature branch. If `git ls-remote --heads origin <branch>` prints nothing, `git push -u origin <branch>`: engineers can't open a PR against a branch the remote doesn't have.
-5. Keep run state out of the repo: if `git check-ignore -q tmp/team/x` fails, add `tmp/team/` to `.gitignore`, then `git add .gitignore && git commit -m "gitignore: ignore orchestrator run state" -- .gitignore && git push`. Do this now, so no task PR has to carry it. If the push is refused, tell the user and keep the commit local; never force it.
+5. Keep run state and graphify's local files out of the repo:
+   - If `git check-ignore -q tmp/team/x` fails, add `tmp/team/` to `.gitignore`.
+   - If `command -v graphify` succeeds and `git check-ignore -q graphify-out/.graphify_python` fails, append `${CLAUDE_PLUGIN_ROOT}/skills/orchestrator/graphify.gitignore` to `.gitignore`. It ignores graphify's machine-local paths, scratch, cache and backups, and keeps what 1c commits: `graph.json`, `GRAPH_REPORT.md`, `manifest.json` (the baseline for incremental updates) and the community labels. Then untrack anything already committed that the rules now ignore: `git ls-files -ci --exclude-standard -z -- graphify-out | xargs -0 git rm --cached --quiet --`.
+   - If either changed anything, `git add .gitignore && git commit -m "gitignore: ignore orchestrator run state and graphify local files" && git push`. Check `git diff --cached --name-only` first: it must list only `.gitignore` and the removals, so unstage anything else.
+
+   Do this now, before 1c commits `graphify-out/`, so no task PR has to carry it. If the push is refused, tell the user and keep the commit local; never force it.
 6. Never delete the feature branch. It goes when the user merges the feature PR.
 
 ### 1e. Questions up front
