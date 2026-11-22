@@ -305,11 +305,11 @@ async function runMode($: EngineInterface, now: number) {
 }
 
 // The agent teams row above the prompt, or undefined when it has nothing to show.
-async function bandRow($: EngineInterface, e: RenderInput<'AbovePrompt'>, isAlwaysOn: boolean) {
+async function bandRow($: EngineInterface, e: RenderInput<'AbovePrompt'>) {
   const a = (await read($, asks)).find(x => x.isAnswerable)
   const { Box, Button, Text } = $.ui.resolve(e)
   if (!a) {
-    if (isAlwaysOn || (await read($, isPaneOpen))) return undefined
+    if (await read($, isPaneOpen)) return undefined
     return (
       <Box>
         <Button key="open-pane" label="▸ agent teams" plain dimColor onPress={() => void openPane($)} />
@@ -627,11 +627,11 @@ export const register: Register = (on, options) => {
 
   // The first answerable ask, above the prompt too: a bare 1 or 2 in an empty prompt answers it,
   // but only when its whole request fits on the row. Otherwise the band points at the pane.
-  // With Always On off and the pane closed, the band offers to open it instead. The rows beneath
+  // While the pane is closed, the band offers to open it instead. The rows beneath
   // (another plugin's, such as the Pomodoro band) stay below this one.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
-    const own = await bandRow($, e, isAlwaysOn)
+    const own = await bandRow($, e)
     const beneath = await next(e)
     if (!own) return beneath
     const { Box } = $.ui.resolve(e)
