@@ -503,22 +503,27 @@ test('AC13: a missing, fractional or out-of-range setting falls back to its defa
 // The Buttons of the band, top to bottom.
 const buttons = async (ui: any) => (await ui.findAll({ type: 'Button' })).map((b: any) => b.key)
 
-test('AC14: another plugin\'s band row stays first, the Pomodoro row below it', async ($, on) => {
-  // Another plugin's row that keeps the band beneath (e.g. the agent teams open button), drawn
-  // the same whichever of the two hooks the engine puts outside the other.
-  on('ui.render', { component: 'AbovePrompt' }, async ($: any, e: any, next: any) => {
-    const { Box, Button } = $.ui.resolve(e)
-    return (
-      <Box flexDirection="column">
-        <Button key="other-row" label="other" onPress={() => {}} />
-        {await next(e)}
-      </Box>
-    )
-  })
+// The keys of the Buttons in a raw tree, top to bottom.
+const buttonKeys = (nodes: any[]): string[] =>
+  nodes.flatMap((n: any) => (n?.type === 'Button' ? [n.props.key] : buttonKeys(n?.children ?? [])))
+
+// The root of a plugin's part in a raw tree, where the engine marks one.
+const partOf = (n: any, plugin: string): any =>
+  n?.part?.plugin === plugin ? n : (n?.children ?? []).map((c: any) => partOf(c, plugin)).find(Boolean)
+
+test('AC14: the band beneath (the agent teams rows) stays first, the Pomodoro row below it', async ($, on) => {
+  // The agent teams rows are the engine's own drawing, which next(e) hands the hook. Newer Claude
+  // Code (2.1.330, not 2.1.311) draws each plugin's ui.render part on its own and hands next(e) an
+  // engine node; older versions nest the hooks, so next(e) is the test's empty band from boot().
+  // Another plugin's rows are its own part, placed by the engine, so this plugin can't order them.
   await boot($, on)
   await run($)
   const ui = await $.ui.mount(BAND)
-  expect(await buttons(ui)).toEqual(['other-row', 'pomodoro-pause', 'pomodoro-stop'])
+  const root = (await ui.findAll({}))[0]
+  const part: any = partOf(root, 'pomodoro') ?? root
+  const [beneath, ...rest] = part.children
+  expect(beneath.type === 'engine' || beneath.props?.key === 'engine-band').toBe(true)
+  expect(buttonKeys(rest)).toEqual(['pomodoro-pause', 'pomodoro-stop'])
   await ui.unmount()
 })
 
